@@ -1,0 +1,20 @@
+## Visual Studio / .NET / C#
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+_ReSharper*/
+*.dotCover
+
+## SQLite runtime databases
+*.db-shm
+*.db-wal
+gameguard_test*.db
+
+## Logs & Temp
+*.log
+logs/
+.system_generated/
