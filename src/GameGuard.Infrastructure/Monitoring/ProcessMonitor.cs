@@ -28,6 +28,10 @@ public sealed class ProcessMonitor : IProcessMonitor
     public event EventHandler<ProcessLifecycleEventArgs>? ProcessRunning;
     public event EventHandler<ProcessLifecycleEventArgs>? ProcessExited;
 
+    public event Func<object?, ProcessLifecycleEventArgs, Task>? ProcessStartedAsync;
+    public event Func<object?, ProcessLifecycleEventArgs, Task>? ProcessRunningAsync;
+    public event Func<object?, ProcessLifecycleEventArgs, Task>? ProcessExitedAsync;
+
     public bool IsRunning => _monitoringTask != null && !_monitoringTask.IsCompleted;
 
     public ProcessMonitor(
@@ -49,6 +53,11 @@ public sealed class ProcessMonitor : IProcessMonitor
         return _trackedProcesses.Values
             .Select(t => t.Process)
             .ToList();
+    }
+
+    public void RegisterTrackedProcess(int processId, GameProfile profile, DetectedProcessInfo process)
+    {
+        _trackedProcesses[processId] = new TrackedProcessState(profile, process, _clock.UtcNow, _clock.UtcNow);
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -110,7 +119,7 @@ public sealed class ProcessMonitor : IProcessMonitor
         if (monitoredGames.Count == 0)
         {
             // If no games are configured for monitoring, check if any currently tracked need exit event
-            NotifyExitedProcesses(new HashSet<int>(), nowUtc);
+            await NotifyExitedProcessesAsync(new HashSet<int>(), nowUtc).ConfigureAwait(false);
             return;
         }
 
@@ -137,13 +146,16 @@ public sealed class ProcessMonitor : IProcessMonitor
                 var updated = existingState with { LastSeenUtc = nowUtc };
                 _trackedProcesses[process.ProcessId] = updated;
 
-                SafeRaiseEvent(ProcessRunning, new ProcessLifecycleEventArgs
+                var args = new ProcessLifecycleEventArgs
                 {
                     Game = matchingGame,
                     Process = process,
                     EventType = ProcessEventType.Running,
                     TimestampUtc = nowUtc
-                });
+                };
+
+                SafeRaiseEvent(ProcessRunning, args);
+                await SafeRaiseEventAsync(ProcessRunningAsync, args).ConfigureAwait(false);
             }
             else
             {
@@ -156,20 +168,23 @@ public sealed class ProcessMonitor : IProcessMonitor
                     process.ProcessId,
                     process.ProcessName);
 
-                SafeRaiseEvent(ProcessStarted, new ProcessLifecycleEventArgs
+                var args = new ProcessLifecycleEventArgs
                 {
                     Game = matchingGame,
                     Process = process,
                     EventType = ProcessEventType.Started,
                     TimestampUtc = nowUtc
-                });
+                };
+
+                SafeRaiseEvent(ProcessStarted, args);
+                await SafeRaiseEventAsync(ProcessStartedAsync, args).ConfigureAwait(false);
             }
         }
 
-        NotifyExitedProcesses(currentMonitoredPids, nowUtc);
+        await NotifyExitedProcessesAsync(currentMonitoredPids, nowUtc).ConfigureAwait(false);
     }
 
-    private void NotifyExitedProcesses(HashSet<int> currentMonitoredPids, DateTime nowUtc)
+    private async Task NotifyExitedProcessesAsync(HashSet<int> currentMonitoredPids, DateTime nowUtc)
     {
         var exitedPids = _trackedProcesses.Keys
             .Where(pid => !currentMonitoredPids.Contains(pid))
@@ -185,13 +200,16 @@ public sealed class ProcessMonitor : IProcessMonitor
                     removedState.Process.ProcessId,
                     removedState.Process.ProcessName);
 
-                SafeRaiseEvent(ProcessExited, new ProcessLifecycleEventArgs
+                var args = new ProcessLifecycleEventArgs
                 {
                     Game = removedState.Profile,
                     Process = removedState.Process,
                     EventType = ProcessEventType.Exited,
                     TimestampUtc = nowUtc
-                });
+                };
+
+                SafeRaiseEvent(ProcessExited, args);
+                await SafeRaiseEventAsync(ProcessExitedAsync, args).ConfigureAwait(false);
             }
         }
     }
@@ -240,6 +258,27 @@ public sealed class ProcessMonitor : IProcessMonitor
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred in ProcessMonitor event handler for event {EventType}.", args.EventType);
+            }
+        }
+    }
+
+    private async Task SafeRaiseEventAsync(Func<object?, ProcessLifecycleEventArgs, Task>? handler, ProcessLifecycleEventArgs args)
+    {
+        if (handler == null)
+        {
+            return;
+        }
+
+        foreach (var invocation in handler.GetInvocationList())
+        {
+            try
+            {
+                var func = (Func<object?, ProcessLifecycleEventArgs, Task>)invocation;
+                await func(this, args).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred in async event handler for event {EventType}.", args.EventType);
             }
         }
     }

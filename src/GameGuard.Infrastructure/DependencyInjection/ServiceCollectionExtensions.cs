@@ -3,6 +3,7 @@ using GameGuard.Core.Services;
 using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Native;
 using GameGuard.Infrastructure.Persistence;
+using GameGuard.Infrastructure.Tracking;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddGameGuardCore(this IServiceCollection services)
     {
         services.AddSingleton<ISystemClock, SystemClock>();
+        services.AddSingleton<IMonotonicClock, MonotonicClock>();
         services.AddSingleton<ILimitCalculator, LimitCalculator>();
         return services;
     }
@@ -39,6 +41,25 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ISystemClock>(),
             sp.GetRequiredService<ILogger<ProcessMonitor>>(),
             pollingInterval));
+
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardTimeTracking(
+        this IServiceCollection services,
+        TimeSpan? checkpointInterval = null,
+        TimeSpan? suspensionGapThreshold = null)
+    {
+        services.AddSingleton<ITimeTrackerService>(sp => new TimeTrackerService(
+            sp.GetRequiredService<IProcessMonitor>(),
+            sp.GetRequiredService<ISessionRepository>(),
+            sp.GetRequiredService<IGameProfileRepository>(),
+            sp.GetRequiredService<IProcessScanner>(),
+            sp.GetRequiredService<ISystemClock>(),
+            sp.GetRequiredService<IMonotonicClock>(),
+            sp.GetRequiredService<ILogger<TimeTrackerService>>(),
+            checkpointInterval,
+            suspensionGapThreshold));
 
         return services;
     }

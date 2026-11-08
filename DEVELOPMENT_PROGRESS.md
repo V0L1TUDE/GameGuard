@@ -1,82 +1,122 @@
 # GameGuard Development Progress
 
-## Roadmap Overview
+## Official 12-Stage Development Roadmap
 
-- [x] **Stage 1: Solution Architecture, Domain Core, Data Persistence & Repository Layer, Test Harness**
-- [x] **Stage 2: Process Monitoring Engine & Anti-Cheat Safe Detection**
-- [ ] **Stage 3: Time Tracking Engine & Limit Calculation Service**
-- [ ] **Stage 4: Enforcement & Anti-Bypass System**
-- [ ] **Stage 5: Desktop UI (WPF MVVM Dashboard & Statistics)**
-- [ ] **Stage 6: Windows Service Integration & IPC**
+### Phase 1: Core Foundation
+- [x] **Stage 1: Solution Architecture, Domain Core & SQLite Persistence**
+- [x] **Stage 2: Anti-Cheat-Safe Process Detection & Monitoring**
+
+### Phase 2: Time Tracking & Limit Management
+- [x] **Stage 3: Time Tracking Engine & Session Lifecycle Management**
+- [ ] **Stage 4: Daily Limit Management & Usage Calculation**
+
+### Phase 3: Enforcement & Protection
+- [ ] **Stage 5: Game Enforcement Engine**
+- [ ] **Stage 6: Relaunch Suppression, Admin Override & Recovery**
+
+### Phase 4: Desktop Application
+- [ ] **Stage 7: WPF Application Foundation & MVVM Architecture**
+- [ ] **Stage 8: Dashboard, Game Configuration & Limit Management UI**
+- [ ] **Stage 9: Session History, Analytics, System Tray & Notifications**
+
+### Phase 5: Background Architecture
+- [ ] **Stage 10: Windows Background Service & Monitoring Extraction**
+- [ ] **Stage 11: Named Pipes IPC, Service Recovery & Security**
+
+### Phase 6: Production Readiness
+- [ ] **Stage 12: Integration Testing, Optimization, Packaging & Release**
 
 ---
 
-## Stage 1: Solution Architecture, Domain Core, Data Persistence & Repository Layer
+## Stage 1: Solution Architecture, Domain Core & SQLite Persistence
 
 ### Status: COMPLETED
 
 ### Achievements
-1. **Repository & Solution Setup**:
-   - Initialized Git repository with comprehensive `.gitignore` for .NET 10, C#, WPF, and SQLite WAL files.
-   - Configured modern .NET 10 solution `GameGuard.slnx` with modular projects: `GameGuard.Core`, `GameGuard.Infrastructure`, and `GameGuard.Core.Tests`.
-
-2. **Core Domain Models (`GameGuard.Core.Models`)**:
-   - `GameProfile`: Identifies games by name and executable aliases (e.g. `cs2.exe`, `VALORANT-Win64-Shipping.exe`), case-insensitive matching logic with or without extension.
-   - `DailyLimit`: Represents configurable individual game limits or global shared pool limits in minutes, with configurable reset hours and grace period durations.
-   - `GamingSession`: Tracks process instances, start time, end time, total active duration in seconds, and termination reason.
-   - `LimitCalculationResult`: Complete snapshot of current daily usage, remaining time, binding constraints (individual vs shared), grace period states, and violation flags.
-   - `SessionTerminationReason`: Enum classifying session exits (Active, UserClosed, LimitEnforced, ForcedByAdmin, CrashOrExternal).
-
-3. **Domain Contracts & Services (`GameGuard.Core.Interfaces` & `GameGuard.Core.Services`)**:
-   - `ISystemClock` / `SystemClock`: Testable time provider abstraction.
-   - `ILimitCalculator` / `LimitCalculator`: Pure mathematical domain logic for computing effective remaining time under dual constraints (individual limit and shared pool limit) and detecting grace period transitions.
-   - `IGameProfileRepository`, `ILimitRepository`, `ISessionRepository`: Asynchronous repository abstractions.
-   - `IDatabaseInitializer`: Schema management contract.
-
-4. **Persistence Layer (`GameGuard.Infrastructure.Persistence`)**:
-   - `SqliteConnectionFactory`: Configures SQLite with Write-Ahead Logging (`PRAGMA journal_mode=WAL`), `PRAGMA synchronous=NORMAL`, and foreign key enforcement for high performance and durability.
-   - `SqliteDatabaseInitializer`: Creates tables (`GameProfiles`, `DailyLimits`, `GamingSessions`) and indexes (`IX_GamingSessions_GameProfile_StartTime`, `IX_GamingSessions_Active`, `IX_DailyLimits_Shared`). Automatically seeds default profiles for Counter-Strike 2 and Valorant.
-   - `SqliteGameProfileRepository`: Lightweight ADO.NET repository with JSON-serialized process aliases.
-   - `SqliteLimitRepository`: Individual and shared limit upsert and query operations.
-   - `SqliteSessionRepository`: Start, heartbeat updates, end-of-session logging, and aggregate day-usage SQL queries.
-   - `ServiceCollectionExtensions`: Clean Microsoft Dependency Injection extensions.
-
-5. **Test Harness (`GameGuard.Core.Tests`)**:
-   - 23 unit and integration tests covering limit calculations, profile matching, and SQLite persistence.
+- Configured .NET 10 LTS modular monolith solution (`GameGuard.slnx`).
+- Core domain models: `GameProfile`, `DailyLimit`, `GamingSession`, `LimitCalculationResult`, `SessionTerminationReason`.
+- High-performance SQLite persistence with WAL mode (`PRAGMA journal_mode=WAL`), foreign keys, and indexes.
+- Pure domain business logic `LimitCalculator` for dual limit evaluation (individual and shared) and grace periods.
+- Seeding for Counter-Strike 2 and Valorant.
+- 23 unit and integration tests.
 
 ---
 
-## Stage 2: Process Monitoring Engine & Anti-Cheat Safe Detection
+## Stage 2: Anti-Cheat-Safe Process Detection & Monitoring
 
 ### Status: COMPLETED
 
 ### Achievements
-1. **Process Inspection Data Contracts (`GameGuard.Core.Models` & `GameGuard.Core.Interfaces`)**:
-   - `DetectedProcessInfo`: Lightweight record (`ProcessId`, `ProcessName`, `ExecutablePath`, `ParentProcessId`) avoiding heavy managed process objects.
-   - `ProcessLifecycleEventArgs`: Carries `GameProfile`, `DetectedProcessInfo`, `ProcessEventType` (`Started`, `Running`, `Exited`), and UTC timestamp.
-   - `IProcessScanner`: Abstraction for scanning system processes.
-   - `IProcessMonitor`: Polling engine interface with `ProcessStarted`, `ProcessRunning`, and `ProcessExited` lifecycle events.
+- Implemented `Win32ProcessScanner` using Windows Toolhelp32 snapshots (`CreateToolhelp32Snapshot`).
+- **Zero Anti-Cheat Risk**: Operates out-of-process, requests zero game memory handles, performs no injection, and requires no kernel drivers (safe for Vanguard, VAC, EAC, BattlEye).
+- Read-only limited image inspection using `PROCESS_QUERY_LIMITED_INFORMATION (0x1000)` and `QueryFullProcessImageNameW`.
+- Custom RAII safe handles `SafeSnapshotHandle` and `SafeProcessQueryHandle`.
+- Background diffing engine `ProcessMonitor` with `ProcessStarted`, `ProcessRunning`, and `ProcessExited` events.
+- Expanded test suite to 33 passing tests.
 
-2. **Anti-Cheat Safe Win32 Enumeration (`GameGuard.Infrastructure.Native`)**:
-   - `Win32ProcessScanner`: Implements OS-level process enumeration using `CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)` and `Process32FirstW` / `Process32NextW`.
-   - **Zero Anti-Cheat Interference**: Requests zero handles to game memory, performs no thread injection, hooks no binaries, and deploys no kernel drivers. Completely safe against Riot Vanguard, Valve Anti-Cheat (VAC), EasyAntiCheat, and BattlEye.
-   - **Non-Invasive Path Resolution**: Uses `OpenProcess` strictly with `PROCESS_QUERY_LIMITED_INFORMATION (0x1000)` and `QueryFullProcessImageNameW`. If access is restricted (e.g. for protected games or system processes), it gracefully continues without throwing or blocking.
-   - `SafeSnapshotHandle` & `SafeProcessQueryHandle`: RAII wrapper handles derived from `SafeHandleZeroOrMinusOneIsInvalid` guaranteeing leak-free OS handle disposal.
+---
 
-3. **Background Monitoring Engine (`GameGuard.Infrastructure.Monitoring`)**:
-   - `ProcessMonitor`: High-performance background polling engine maintaining `ConcurrentDictionary<int, TrackedProcessState>`.
-   - Real-time diffing between scans to trigger `ProcessStarted`, `ProcessRunning`, and `ProcessExited` events.
-   - Configurable polling frequency (default 1000ms), asynchronous cancellation, and isolated exception handling for subscriber event handlers.
-   - Exposed `CheckProcessesOnceAsync` method enabling synchronous lifecycle evaluation and deterministic testing.
+## Stage 3: Time Tracking Engine & Session Lifecycle Management
 
-4. **Dependency Injection Registration (`GameGuard.Infrastructure.DependencyInjection`)**:
-   - Added `AddGameGuardProcessMonitoring` extension method registering `IProcessScanner` -> `Win32ProcessScanner` and `IProcessMonitor` -> `ProcessMonitor`.
+### Status: COMPLETED
 
-5. **Test Harness Expansion (`GameGuard.Core.Tests`)**:
-   - Added `MockProcessScanner` and `MockGameProfileRepository` for isolated process lifecycle verification.
-   - Added 7 tests in `ProcessMonitorTests` (start detection, running persistence, exit detection, unmonitored filtering, disabled profile handling, concurrent multi-game tracking, engine start/stop).
-   - Added 3 integration tests in `Win32ProcessScannerTests` validating real-time Win32 snapshot execution on Windows.
-   - Overall test suite: **33 passed, 0 failed, 0 skipped (Duration: ~200 ms)**.
+### Objectives
+Connect the Stage 2 process-monitoring engine with the SQLite session repository to track actual gameplay duration in real time, persist checkpoints periodically, handle process exits, prevent sleep/hibernation time inflation, recover from unexpected shutdowns, and track multiple simultaneous games cleanly.
+
+### Components Implemented
+1. **Monotonic Time Abstraction (`GameGuard.Core.Interfaces` & `GameGuard.Core.Services`)**:
+   - `IMonotonicClock`: Contract providing high-resolution monotonic time readings independent of system wall-clock adjustments or daylight saving shifts.
+   - `MonotonicClock`: Production implementation utilizing high-precision `Stopwatch.GetTimestamp()` and `Stopwatch.GetElapsedTime()`.
+
+2. **Session Lifecycle Event Contracts (`GameGuard.Core.Models` & `GameGuard.Core.Interfaces`)**:
+   - `SessionLifecycleEventArgs`: Carries `GameProfile`, `GamingSession`, UTC timestamp, calculated `TimeSpan Duration`, and `SessionTerminationReason`.
+   - `ITimeTrackerService`: Session coordination contract exposing `SessionStarted`, `SessionUpdated`, and `SessionEnded` events, active session lookups, and startup recovery methods.
+
+3. **Time Tracking Engine (`GameGuard.Infrastructure.Tracking`)**:
+   - `TimeTrackerService`:
+     - Subscribes to process monitor lifecycle events (`ProcessStartedAsync`, `ProcessRunningAsync`, `ProcessExitedAsync`).
+     - **Session Creation**: Creates a new `GamingSession` on process arrival, writes to SQLite, and initializes thread-safe in-memory tracking. Prevents duplicate session creation for the same PID.
+     - **Monotonic Duration Tracking**: Measures exact elapsed time delta-by-delta using `IMonotonicClock`.
+     - **Periodic Checkpointing**: Automatically flushes active gameplay duration to SQLite at a configurable checkpoint interval (default 15 seconds) to avoid database write contention.
+     - **Process Exit Finalization**: On game exit, captures final elapsed seconds, persists the closed session with `EndTimeUtc`, records `SessionTerminationReason.UserClosed`, and cleans up tracking state.
+     - **Sleep & Hibernation Detection**: Evaluates consecutive polling deltas. If a delta exceeds the suspension threshold (e.g. laptop lid closed or Windows sleep), clamps the interval to prevent sleep time from falsely counting as gaming time.
+
+4. **Startup Session Recovery & Reused-PID Safeguards**:
+   - `ReconcileOrphanedSessionsAsync`:
+     - On startup, queries all unclosed sessions in SQLite (`EndTimeUtc IS NULL`).
+     - Scans running OS processes and verifies both Process ID AND process executable identity matching the game profile.
+     - **Reused PID Protection**: If a process with the same PID exists but has a different executable name (Windows reused the PID for another app), the session is identified as stale rather than recovered.
+     - **Stale Finalization**: Orphaned sessions whose processes died during an unexpected shutdown are marked with `SessionTerminationReason.CrashOrExternal` and their estimated end timestamp.
+     - **Ongoing Session Recovery**: Surviving game processes are re-attached to the active tracking dictionary and registered with `ProcessMonitor` to prevent duplicate start events.
+
+5. **Concurrency & Thread Safety**:
+   - `ConcurrentDictionary<int, ActiveSessionTracker>` for independent tracking of multiple simultaneous games (e.g. CS2 and Valorant running concurrently).
+   - Dedicated `_dbWriteLock` (`SemaphoreSlim`) serializing SQLite write operations, guaranteeing zero `SQLITE_BUSY` contention during concurrent game heartbeats.
+
+6. **Repository & Pipeline Enhancements**:
+   - Extended `ISessionRepository.EndSessionAsync` and `SqliteSessionRepository.EndSessionAsync` with an optional `durationSeconds` parameter to ensure the exact final duration is persisted atomically upon session close.
+   - Enhanced `IProcessMonitor` with async event delegates (`ProcessStartedAsync`, `ProcessRunningAsync`, `ProcessExitedAsync`) and `RegisterTrackedProcess`.
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 16 new automated tests in `TimeTrackerServiceTests`:
+1. `Lifecycle_StartingMonitoredGame_CreatesSessionInDatabaseAndMemory`
+2. `Lifecycle_RunningGame_UpdatesSessionDuration`
+3. `Lifecycle_ExitingGame_FinalizesSessionInDatabaseAndMemory`
+4. `Lifecycle_DuplicateProcessStartedEvent_DoesNotCreateDuplicateSession`
+5. `Lifecycle_UnmonitoredProcess_DoesNotCreateSession`
+6. `TimeTracking_PeriodicHeartbeat_PersistsAtConfiguredInterval`
+7. `TimeTracking_Exit_PersistsFinalDurationEvenIfCheckpointNotReached`
+8. `TimeTracking_SystemClockJump_DoesNotCorruptMonotonicElapsedCalculations`
+9. `TimeTracking_SleepOrSuspensionGap_IsClampedToAvoidInflatedPlaytime`
+10. `TimeTracking_LongRunningSession_MaintainsAccuracy` (10-hour 3600-cycle session)
+11. `Recovery_ValidActiveSession_IsRecoveredOnStartup`
+12. `Recovery_StaleSession_IsFinalizedOnStartup`
+13. `Recovery_ReusedPidWithDifferentProcessName_IsRecognizedAsStaleAndFinalized`
+14. `Recovery_DoesNotCreateDuplicateSessions_WhenProcessScannedMultipleTimes`
+15. `Concurrency_MultipleGamesSimultaneously_AreTrackedIndependently`
+16. `Concurrency_ConcurrentLifecycleEvents_MaintainConsistency` (10 simultaneous processes)
+
+- **Total Test Suite**: **49 passed, 0 failed, 0 skipped (Duration: ~780 ms)**.
 
 ### Verification Commands
 ```powershell
@@ -85,7 +125,6 @@ dotnet build GameGuard.slnx
 dotnet test GameGuard.slnx
 ```
 
-### Remaining Limitations
-- Dynamic time tracking engine and automated session persistence to SQLite are not yet connected to the process monitor events (scheduled for Stage 3).
-- Warning notifications, termination actions, and relaunch blocking are not yet active (scheduled for Stage 4).
-- Desktop GUI (WPF MVVM) and Windows Service extraction remain for Stages 5 and 6.
+### Known Limitations
+- Stage 3 focuses exclusively on time tracking and session persistence. Daily limits, midnight rollovers, remaining quota calculations, and warning thresholds are not evaluated dynamically at runtime (scheduled for Stage 4).
+- Soft warnings, hard game termination, and relaunch suppression are scheduled for Stages 5 and 6.

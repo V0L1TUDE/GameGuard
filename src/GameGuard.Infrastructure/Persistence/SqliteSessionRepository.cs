@@ -98,6 +98,7 @@ public sealed class SqliteSessionRepository : ISessionRepository
         DateTime endTimeUtc,
         SessionTerminationReason reason,
         string? notes = null,
+        int? durationSeconds = null,
         CancellationToken cancellationToken = default)
     {
         await using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -106,6 +107,7 @@ public sealed class SqliteSessionRepository : ISessionRepository
             UPDATE GamingSessions
             SET EndTimeUtc = $endTimeUtc,
                 TerminationReason = $terminationReason,
+                DurationSeconds = COALESCE($durationSeconds, DurationSeconds),
                 Notes = COALESCE($notes, Notes)
             WHERE Id = $id;
         ";
@@ -113,6 +115,7 @@ public sealed class SqliteSessionRepository : ISessionRepository
         command.Parameters.AddWithValue("$endTimeUtc", endTimeUtc.ToString("O"));
         command.Parameters.AddWithValue("$terminationReason", (int)reason);
         command.Parameters.AddWithValue("$notes", (object?)notes ?? DBNull.Value);
+        command.Parameters.AddWithValue("$durationSeconds", (object?)durationSeconds ?? DBNull.Value);
 
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
