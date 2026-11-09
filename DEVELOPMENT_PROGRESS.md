@@ -12,7 +12,7 @@
 
 ### Phase 3: Enforcement & Protection
 - [x] **Stage 5: Game Enforcement Engine**
-- [ ] **Stage 6: Relaunch Suppression, Admin Override & Recovery**
+- [x] **Stage 6: Relaunch Suppression, Admin Override & Recovery**
 
 ### Phase 4: Desktop Application
 - [ ] **Stage 7: WPF Application Foundation & MVVM Architecture**
@@ -200,3 +200,89 @@ dotnet test GameGuard.slnx
 ### Known Limitations
 - Stage 5 terminates running game processes when quota is exhausted. However, it does not prevent users from immediately relaunching the executable while quota remains exhausted. This is addressed in Stage 6 (Relaunch Suppression, Admin Override & Recovery).
 - Desktop user interface (WPF MVVM) is scheduled for Stages 7, 8, and 9.
+
+
+---
+
+## Stage 6: Relaunch Suppression, Admin Override & Recovery
+
+### Status: COMPLETED
+
+### Objectives
+Prevent casual relaunch bypasses when game limits are exhausted, enforce cooldown periods for aggressive relaunch spamming, provide cryptographic administrator authentication (PBKDF2 with HMAC-SHA256), establish an emergency admin override and bonus-time mechanism, and implement offline anti-tamper clock rollback detection.
+
+### Components Implemented
+1. **Domain Models & Event Contracts (`GameGuard.Core.Models`)**:
+   - `OverrideType`: Enum specifying `BonusTime` (extra minutes), `TemporaryUnlock` (unconditional play window), and `EmergencyLock` (immediate lock regardless of quota).
+   - `AdminOverride`: Domain model with lifetime, revocation tracking, and factory helpers.
+   - `RelaunchBlockedEventArgs`: Event contract raised when an exhausted game launch is intercepted and terminated.
+   - `RelaunchBlockRecord`: Audit model persisted to SQLite.
+   - `ClockTamperEventArgs`: Event contract dispatched upon system clock rollback detection.
+   - Updated `LimitCalculationResult`: Seamlessly supports active override states (`HasActiveOverride`, `ActiveOverrideType`, `BonusMinutesApplied`, `OverrideExpiresAtUtc`).
+
+2. **Core Abstractions (`GameGuard.Core.Interfaces`)**:
+   - `IAdminOverrideRepository`: Abstraction for persisting and retrieving active and historical overrides.
+   - `IAdminAuthService`: Cryptographic admin password validation, modification, and brute-force lockout.
+   - `IRelaunchBlockRepository`: Repository for logging and querying blocked launches.
+   - `IRelaunchSuppressionService`: Coordination service listening to `ProcessStarted` events and executing fast suppression.
+   - `IClockTamperDetector`: Offline anti-tamper watermark tracking for system clock manipulation.
+
+3. **Limit Engine & Persistence Integration**:
+   - `LimitCalculator`: Incorporates `AdminOverride` parameters. Correctly factors in `BonusTime` allowances, grants unconditional play for `TemporaryUnlock`, and forces immediate limit exhaustion for `EmergencyLock`.
+   - `SqliteDatabaseInitializer`: Added `AdminOverrides`, `AppSettings`, and `RelaunchBlocks` tables with indexes.
+   - `SqliteAdminOverrideRepository`: Queries active overrides with specific-game precedence over global overrides.
+   - `SqliteRelaunchBlockRepository`: Stores and tallies relaunch block events.
+   - `LimitManagerService`: Accepts `IAdminOverrideRepository` and `IClockTamperDetector` for real-time calculation and clock validation.
+
+4. **Security & Protection Services (`GameGuard.Infrastructure.Security` & `GameGuard.Infrastructure.Enforcement`)**:
+   - `SqliteAdminAuthService`:
+     - Cryptographically secure PBKDF2 hashing (`Rfc2898DeriveBytes.Pbkdf2` using HMAC-SHA256, 100,000 iterations, 16-byte random salt, 32-byte hash).
+     - Timing attack defense via `CryptographicOperations.FixedTimeEquals`.
+     - Brute-force protection: Enforces a 5-minute lockout after 5 consecutive failed attempts.
+   - `ClockTamperDetector`: Tracks the highest observed UTC timestamp and fires `ClockRollbackDetected` if system time is set backwards by more than 1 minute.
+   - `RelaunchSuppressionService`:
+     - Intercepts process launches of quota-exhausted games.
+     - Fast termination via `IProcessTerminator` (50ms graceful timeout to prevent game window exposure).
+     - Sliding window relaunch tracking (60s window).
+     - Automated cooldown enforcement: 5-minute penalty after 3 rapid launch attempts.
+     - Reconciles and zeroes any newly created session in SQLite.
+
+5. **Dependency Injection**:
+   - Added `AddGameGuardRelaunchSuppression` and updated `AddGameGuardSqlite` and `AddGameGuardLimitManagement` in `ServiceCollectionExtensions`.
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 17 new automated tests (88 total):
+- `AdminAuthServiceTests`:
+  1. `IsPasswordConfiguredAsync_WhenEmpty_ReturnsFalse`
+  2. `SetPasswordAsync_AndValidatePasswordAsync_ValidatesCorrectPassword`
+  3. `ValidatePasswordAsync_AfterFiveFailedAttempts_EnforcesLockout`
+  4. `ChangePasswordAsync_WithValidCurrentPassword_UpdatesPassword`
+- `ClockTamperDetectorTests`:
+  5. `ValidateSystemTime_WithNormalForwardProgress_UpdatesWatermarkWithoutEvent`
+  6. `ValidateSystemTime_WithMinorJitterWithinTolerance_DoesNotFireRollback`
+  7. `ValidateSystemTime_WithRollbackBeyondTolerance_FiresRollbackEvent`
+- `AdminOverrideRepositoryAndLimitTests`:
+  8. `AddOverrideAsync_AndGetActiveOverrideForGameAsync_RetrievesActiveOverride`
+  9. `RevokeOverrideAsync_DeactivatesOverrideImmediately`
+  10. `LimitCalculator_WithEmergencyLockOverride_ForcesLimitExceededImmediately`
+  11. `LimitCalculator_WithTemporaryUnlockOverride_AllowsPlayEvenIfQuotaExhausted`
+  12. `LimitCalculator_WithBonusTimeOverride_AddsAllowedMinutesToQuota`
+- `RelaunchSuppressionServiceTests`:
+  13. `CheckAndSuppressIfExhaustedAsync_WhenWithinQuota_DoesNotSuppress`
+  14. `CheckAndSuppressIfExhaustedAsync_WhenQuotaExhausted_SuppressesAndRecordsBlock`
+  15. `CheckAndSuppressIfExhaustedAsync_WithRepeatedAttempts_EnforcesCooldown`
+  16. `CheckAndSuppressIfExhaustedAsync_WhenActiveTemporaryUnlockOverrideExists_AllowsLaunch`
+  17. `RelaunchSuppressionService_StartAndStop_ManagesLifecycleCorrectly`
+
+- **Total Test Suite**: **88 passed, 0 failed, 0 skipped (Duration: ~1.0 s)**.
+
+### Verification Commands
+```powershell
+$env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+dotnet build GameGuard.slnx
+dotnet test GameGuard.slnx
+```
+
+### Known Limitations
+- Stage 6 completes Phase 3 (Enforcement & Protection). All core domain, monitoring, time-tracking, limit management, enforcement, and security engines are complete and operate entirely offline without UI dependencies.
+- Next phase is **Phase 4: Desktop Application**, starting with **Stage 7: WPF Application Foundation & MVVM Architecture**.

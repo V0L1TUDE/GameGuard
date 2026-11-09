@@ -11,5 +11,6 @@ public interface ILimitCalculator
         DailyLimit? sharedLimit,
         int individualSecondsUsedToday,
         int totalSharedSecondsUsedToday,
-        int activeSessionDurationSeconds = 0);
+        int activeSessionDurationSeconds = 0,
+        AdminOverride? activeOverride = null);
 }

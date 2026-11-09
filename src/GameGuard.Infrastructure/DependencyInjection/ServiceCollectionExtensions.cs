@@ -5,6 +5,7 @@ using GameGuard.Infrastructure.Limits;
 using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Native;
 using GameGuard.Infrastructure.Persistence;
+using GameGuard.Infrastructure.Security;
 using GameGuard.Infrastructure.Tracking;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMonotonicClock, MonotonicClock>();
         services.AddSingleton<ILimitCalculator, LimitCalculator>();
         services.AddSingleton<IDayBoundaryCalculator, DayBoundaryCalculator>();
+        services.AddSingleton<IClockTamperDetector, ClockTamperDetector>();
         return services;
     }
 
@@ -31,6 +33,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGameProfileRepository, SqliteGameProfileRepository>();
         services.AddSingleton<ILimitRepository, SqliteLimitRepository>();
         services.AddSingleton<ISessionRepository, SqliteSessionRepository>();
+        services.AddSingleton<IAdminOverrideRepository, SqliteAdminOverrideRepository>();
+        services.AddSingleton<IRelaunchBlockRepository, SqliteRelaunchBlockRepository>();
+        services.AddSingleton<IAdminAuthService, SqliteAdminAuthService>();
 
         return services;
     }
@@ -84,7 +89,9 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ILogger<LimitManagerService>>(),
             timeZone,
             warningThresholdsMinutes,
-            evaluationInterval));
+            evaluationInterval,
+            sp.GetService<IAdminOverrideRepository>(),
+            sp.GetService<IClockTamperDetector>()));
 
         return services;
     }
@@ -101,6 +108,21 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IProcessScanner>(),
             sp.GetRequiredService<ISystemClock>(),
             sp.GetRequiredService<ILogger<EnforcementService>>()));
+
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardRelaunchSuppression(this IServiceCollection services)
+    {
+        services.AddSingleton<IRelaunchSuppressionService>(sp => new RelaunchSuppressionService(
+            sp.GetRequiredService<IProcessMonitor>(),
+            sp.GetRequiredService<ILimitManagerService>(),
+            sp.GetRequiredService<IProcessTerminator>(),
+            sp.GetRequiredService<IRelaunchBlockRepository>(),
+            sp.GetRequiredService<ISessionRepository>(),
+            sp.GetRequiredService<ITimeTrackerService>(),
+            sp.GetRequiredService<ISystemClock>(),
+            sp.GetRequiredService<ILogger<RelaunchSuppressionService>>()));
 
         return services;
     }

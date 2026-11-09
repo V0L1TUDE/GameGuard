@@ -71,6 +71,41 @@ public sealed class SqliteDatabaseInitializer : IDatabaseInitializer
 
                     CREATE INDEX IF NOT EXISTS IX_DailyLimits_Shared 
                         ON DailyLimits (IsShared);
+
+                    CREATE TABLE IF NOT EXISTS AdminOverrides (
+                        Id TEXT PRIMARY KEY NOT NULL,
+                        GameProfileId TEXT,
+                        Type INTEGER NOT NULL,
+                        BonusMinutes INTEGER NOT NULL DEFAULT 0,
+                        CreatedAtUtc TEXT NOT NULL,
+                        ExpiresAtUtc TEXT NOT NULL,
+                        Reason TEXT,
+                        IsRevoked INTEGER NOT NULL DEFAULT 0,
+                        RevokedAtUtc TEXT,
+                        FOREIGN KEY (GameProfileId) REFERENCES GameProfiles(Id) ON DELETE CASCADE
+                    );
+
+                    CREATE TABLE IF NOT EXISTS AppSettings (
+                        Key TEXT PRIMARY KEY NOT NULL,
+                        Value TEXT NOT NULL,
+                        UpdatedAtUtc TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS RelaunchBlocks (
+                        Id TEXT PRIMARY KEY NOT NULL,
+                        GameProfileId TEXT NOT NULL,
+                        ProcessId INTEGER NOT NULL,
+                        ProcessName TEXT NOT NULL,
+                        BlockedAtUtc TEXT NOT NULL,
+                        Reason TEXT NOT NULL,
+                        FOREIGN KEY (GameProfileId) REFERENCES GameProfiles(Id) ON DELETE CASCADE
+                    );
+
+                    CREATE INDEX IF NOT EXISTS IX_AdminOverrides_Active
+                        ON AdminOverrides (GameProfileId, IsRevoked, ExpiresAtUtc);
+
+                    CREATE INDEX IF NOT EXISTS IX_RelaunchBlocks_Game_Time
+                        ON RelaunchBlocks (GameProfileId, BlockedAtUtc);
                 ";
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }

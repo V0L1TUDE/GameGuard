@@ -14,6 +14,8 @@ public sealed class LimitManagerService : ILimitManagerService
     private readonly ILimitCalculator _limitCalculator;
     private readonly IDayBoundaryCalculator _boundaryCalculator;
     private readonly ISystemClock _systemClock;
+    private readonly IAdminOverrideRepository? _overrideRepository;
+    private readonly IClockTamperDetector? _clockTamperDetector;
     private readonly ILogger<LimitManagerService> _logger;
 
     private readonly TimeZoneInfo _timeZone;
@@ -49,7 +51,9 @@ public sealed class LimitManagerService : ILimitManagerService
         ILogger<LimitManagerService> logger,
         TimeZoneInfo? timeZone = null,
         IEnumerable<int>? warningThresholdsMinutes = null,
-        TimeSpan? evaluationInterval = null)
+        TimeSpan? evaluationInterval = null,
+        IAdminOverrideRepository? overrideRepository = null,
+        IClockTamperDetector? clockTamperDetector = null)
     {
         _gameRepository = gameRepository;
         _limitRepository = limitRepository;
@@ -59,6 +63,8 @@ public sealed class LimitManagerService : ILimitManagerService
         _boundaryCalculator = boundaryCalculator;
         _systemClock = systemClock;
         _logger = logger;
+        _overrideRepository = overrideRepository;
+        _clockTamperDetector = clockTamperDetector;
 
         _timeZone = timeZone ?? TimeZoneInfo.Local;
         _warningThresholdsMinutes = (warningThresholdsMinutes ?? new[] { 15, 5, 1 })
@@ -106,6 +112,12 @@ public sealed class LimitManagerService : ILimitManagerService
 
         int totalSharedSeconds = dbSharedSeconds + otherActiveSeconds;
 
+        AdminOverride? activeOverride = null;
+        if (_overrideRepository != null)
+        {
+            activeOverride = await _overrideRepository.GetActiveOverrideForGameAsync(gameProfileId, _systemClock.UtcNow, cancellationToken).ConfigureAwait(false);
+        }
+
         return _limitCalculator.Calculate(
             game.Id,
             game.Name,
@@ -113,7 +125,8 @@ public sealed class LimitManagerService : ILimitManagerService
             sharedLimit,
             dbIndSeconds,
             totalSharedSeconds,
-            currentActiveSeconds);
+            currentActiveSeconds,
+            activeOverride);
     }
 
     public async Task<IReadOnlyList<LimitCalculationResult>> GetAllCurrentStatusesAsync(CancellationToken cancellationToken = default)
@@ -138,6 +151,7 @@ public sealed class LimitManagerService : ILimitManagerService
     public async Task CheckLimitsAsync(CancellationToken cancellationToken = default)
     {
         DateTime nowUtc = _systemClock.UtcNow;
+        _clockTamperDetector?.ValidateSystemTime(nowUtc);
         CheckDayRollover(nowUtc);
 
         var monitoredGames = await _gameRepository.GetMonitoredAsync(cancellationToken).ConfigureAwait(false);
