@@ -8,7 +8,7 @@
 
 ### Phase 2: Time Tracking & Limit Management
 - [x] **Stage 3: Time Tracking Engine & Session Lifecycle Management**
-- [ ] **Stage 4: Daily Limit Management & Usage Calculation**
+- [x] **Stage 4: Daily Limit Management & Usage Calculation**
 
 ### Phase 3: Enforcement & Protection
 - [ ] **Stage 5: Game Enforcement Engine**
@@ -60,63 +60,71 @@
 
 ### Status: COMPLETED
 
+### Achievements
+- `IMonotonicClock` / `MonotonicClock`: High-resolution monotonic time measurement (`Stopwatch.GetTimestamp()` / `Stopwatch.GetElapsedTime()`) immune to wall-clock time shifts or Daylight Saving Time changes.
+- `TimeTrackerService`: Subscribes to process lifecycle events, creates sessions on launch, tracks elapsed gameplay, flushes heartbeats periodically to SQLite (default 15s interval), and concludes sessions upon game exit.
+- Sleep & Hibernation Protection: Detects abnormal tick deltas and clamps elapsed time to prevent Windows sleep from counting as active gameplay.
+- Startup Session Recovery: Reconciles unclosed sessions on startup, detects and finalizes stale sessions, and validates process executable names to defend against Windows PID reuse.
+- Concurrency & Thread Safety: Multi-game concurrent tracking isolated by PID; serialized SQLite writes via `SemaphoreSlim`.
+- Expanded test suite to 49 passing tests.
+
+---
+
+## Stage 4: Daily Limit Management & Usage Calculation
+
+### Status: COMPLETED
+
 ### Objectives
-Connect the Stage 2 process-monitoring engine with the SQLite session repository to track actual gameplay duration in real time, persist checkpoints periodically, handle process exits, prevent sleep/hibernation time inflation, recover from unexpected shutdowns, and track multiple simultaneous games cleanly.
+Provide automated daily quota management, real-time usage aggregation combining SQLite completed history with in-memory active gameplay, local timezone and midnight boundary calculations, warning threshold notifications, grace-period monitoring, and quota exhaustion detection.
 
 ### Components Implemented
-1. **Monotonic Time Abstraction (`GameGuard.Core.Interfaces` & `GameGuard.Core.Services`)**:
-   - `IMonotonicClock`: Contract providing high-resolution monotonic time readings independent of system wall-clock adjustments or daylight saving shifts.
-   - `MonotonicClock`: Production implementation utilizing high-precision `Stopwatch.GetTimestamp()` and `Stopwatch.GetElapsedTime()`.
+1. **Day Boundary Management (`GameGuard.Core.Interfaces` & `GameGuard.Infrastructure.Limits`)**:
+   - `IDayBoundaryCalculator`: Interface for computing local/UTC calendar boundaries.
+   - `DayBoundaryCalculator`: Converts UTC timestamps to the target local timezone, evaluates custom reset hours (0–23), accounts for Daylight Saving Time gaps/overlaps, and returns exact `[StartUtc, EndUtc)` ranges.
+   - Accurately assigns times before the reset hour (e.g. 03:00 AM when reset is 04:00 AM) to the previous cycle.
 
-2. **Session Lifecycle Event Contracts (`GameGuard.Core.Models` & `GameGuard.Core.Interfaces`)**:
-   - `SessionLifecycleEventArgs`: Carries `GameProfile`, `GamingSession`, UTC timestamp, calculated `TimeSpan Duration`, and `SessionTerminationReason`.
-   - `ITimeTrackerService`: Session coordination contract exposing `SessionStarted`, `SessionUpdated`, and `SessionEnded` events, active session lookups, and startup recovery methods.
+2. **Event Contracts (`GameGuard.Core.Models`)**:
+   - `LimitWarningEventArgs`: Triggered when remaining playtime crosses configured warning thresholds (e.g., 15m, 5m, 1m).
+   - `GracePeriodEventArgs`: Triggered when quota is exhausted and grace countdown is active (`GracePeriodStarted` and periodic `GracePeriodUpdated`).
+   - `QuotaExhaustedEventArgs`: Triggered when both daily allowance and grace period have expired (`QuotaExhausted`).
+   - `DayRolloverEventArgs`: Triggered when the clock crosses the reset boundary (`DayRolloverOccurred`).
 
-3. **Time Tracking Engine (`GameGuard.Infrastructure.Tracking`)**:
-   - `TimeTrackerService`:
-     - Subscribes to process monitor lifecycle events (`ProcessStartedAsync`, `ProcessRunningAsync`, `ProcessExitedAsync`).
-     - **Session Creation**: Creates a new `GamingSession` on process arrival, writes to SQLite, and initializes thread-safe in-memory tracking. Prevents duplicate session creation for the same PID.
-     - **Monotonic Duration Tracking**: Measures exact elapsed time delta-by-delta using `IMonotonicClock`.
-     - **Periodic Checkpointing**: Automatically flushes active gameplay duration to SQLite at a configurable checkpoint interval (default 15 seconds) to avoid database write contention.
-     - **Process Exit Finalization**: On game exit, captures final elapsed seconds, persists the closed session with `EndTimeUtc`, records `SessionTerminationReason.UserClosed`, and cleans up tracking state.
-     - **Sleep & Hibernation Detection**: Evaluates consecutive polling deltas. If a delta exceeds the suspension threshold (e.g. laptop lid closed or Windows sleep), clamps the interval to prevent sleep time from falsely counting as gaming time.
+3. **Limit Manager Service (`GameGuard.Infrastructure.Limits`)**:
+   - `LimitManagerService`:
+     - Implements `ILimitManagerService`.
+     - Integrates `IGameProfileRepository`, `ILimitRepository`, `ISessionRepository`, `ITimeTrackerService`, `ILimitCalculator`, `IDayBoundaryCalculator`, and `ISystemClock`.
+     - **Usage Aggregation**: Combines completed session seconds today from SQLite (`WHERE EndTimeUtc IS NOT NULL`) with authoritative live duration from `ITimeTrackerService`, preventing any double-counting of checkpointed active sessions.
+     - **Dual Limit Evaluation**: Automatically determines whether individual or shared limits bind for a game.
+     - **One-Shot Threshold Warnings**: Tracks which warning thresholds have already been emitted per game to prevent duplicate alerts during consecutive ticks.
+     - **Grace Period State Machine**: Emits `GracePeriodStarted` exactly once on transition, followed by `GracePeriodUpdated` on subsequent ticks.
+     - **Automatic Midnight Rollover**: Automatically resets fired warning flags, clears grace states, and raises `DayRolloverOccurred` when midnight or the custom reset hour passes.
+     - **Asynchronous Event-Driven Evaluation**: Listens to `SessionUpdated` events from `TimeTrackerService` and operates a background evaluation loop.
 
-4. **Startup Session Recovery & Reused-PID Safeguards**:
-   - `ReconcileOrphanedSessionsAsync`:
-     - On startup, queries all unclosed sessions in SQLite (`EndTimeUtc IS NULL`).
-     - Scans running OS processes and verifies both Process ID AND process executable identity matching the game profile.
-     - **Reused PID Protection**: If a process with the same PID exists but has a different executable name (Windows reused the PID for another app), the session is identified as stale rather than recovered.
-     - **Stale Finalization**: Orphaned sessions whose processes died during an unexpected shutdown are marked with `SessionTerminationReason.CrashOrExternal` and their estimated end timestamp.
-     - **Ongoing Session Recovery**: Surviving game processes are re-attached to the active tracking dictionary and registered with `ProcessMonitor` to prevent duplicate start events.
+4. **Repository Refinements**:
+   - Updated `SqliteSessionRepository.GetTotalSecondsUsedForGameTodayAsync` and `GetTotalSharedSecondsUsedTodayAsync` to query `AND EndTimeUtc IS NOT NULL`, properly separating completed historical sessions from active live tracking.
 
-5. **Concurrency & Thread Safety**:
-   - `ConcurrentDictionary<int, ActiveSessionTracker>` for independent tracking of multiple simultaneous games (e.g. CS2 and Valorant running concurrently).
-   - Dedicated `_dbWriteLock` (`SemaphoreSlim`) serializing SQLite write operations, guaranteeing zero `SQLITE_BUSY` contention during concurrent game heartbeats.
-
-6. **Repository & Pipeline Enhancements**:
-   - Extended `ISessionRepository.EndSessionAsync` and `SqliteSessionRepository.EndSessionAsync` with an optional `durationSeconds` parameter to ensure the exact final duration is persisted atomically upon session close.
-   - Enhanced `IProcessMonitor` with async event delegates (`ProcessStartedAsync`, `ProcessRunningAsync`, `ProcessExitedAsync`) and `RegisterTrackedProcess`.
+5. **Dependency Injection**:
+   - Added `AddGameGuardLimitManagement` to `ServiceCollectionExtensions`.
 
 ### Test Suite Results (`GameGuard.Core.Tests`)
-Added 16 new automated tests in `TimeTrackerServiceTests`:
-1. `Lifecycle_StartingMonitoredGame_CreatesSessionInDatabaseAndMemory`
-2. `Lifecycle_RunningGame_UpdatesSessionDuration`
-3. `Lifecycle_ExitingGame_FinalizesSessionInDatabaseAndMemory`
-4. `Lifecycle_DuplicateProcessStartedEvent_DoesNotCreateDuplicateSession`
-5. `Lifecycle_UnmonitoredProcess_DoesNotCreateSession`
-6. `TimeTracking_PeriodicHeartbeat_PersistsAtConfiguredInterval`
-7. `TimeTracking_Exit_PersistsFinalDurationEvenIfCheckpointNotReached`
-8. `TimeTracking_SystemClockJump_DoesNotCorruptMonotonicElapsedCalculations`
-9. `TimeTracking_SleepOrSuspensionGap_IsClampedToAvoidInflatedPlaytime`
-10. `TimeTracking_LongRunningSession_MaintainsAccuracy` (10-hour 3600-cycle session)
-11. `Recovery_ValidActiveSession_IsRecoveredOnStartup`
-12. `Recovery_StaleSession_IsFinalizedOnStartup`
-13. `Recovery_ReusedPidWithDifferentProcessName_IsRecognizedAsStaleAndFinalized`
-14. `Recovery_DoesNotCreateDuplicateSessions_WhenProcessScannedMultipleTimes`
-15. `Concurrency_MultipleGamesSimultaneously_AreTrackedIndependently`
-16. `Concurrency_ConcurrentLifecycleEvents_MaintainConsistency` (10 simultaneous processes)
+Added 13 new automated tests:
+- `DayBoundaryCalculatorTests`:
+  1. `GetDayBoundary_InUtcAtMidnight_CalculatesAccurateDayBounds`
+  2. `GetDayBoundary_WhenTimeIsBeforeResetHour_BelongsToPreviousDayCycle`
+  3. `GetDayBoundary_WhenTimeIsAfterResetHour_BelongsToCurrentDayCycle`
+  4. `GetDayBoundary_WithNonUtcTimeZone_ConvertsAccurately`
+- `LimitManagerServiceTests`:
+  5. `GetCurrentStatus_WithIndividualLimitOnly_CalculatesUsageAndRemainingCorrectly`
+  6. `GetCurrentStatus_WithSharedLimitOnly_AggregatesAcrossAllGames`
+  7. `GetCurrentStatus_WithDualLimits_IdentifiesBindingConstraint`
+  8. `CheckLimits_WhenApproachingThresholds_FiresLimitWarningIssuedOncePerThreshold`
+  9. `CheckLimits_WhenTimeExpires_FiresGracePeriodStartedAndUpdated`
+  10. `CheckLimits_WhenGracePeriodExhausted_FiresQuotaExhausted`
+  11. `CheckLimits_WhenDayRolloverOccurs_FiresDayRolloverOccurredAndResetsWarnings`
+  12. `GetAllCurrentStatuses_ReturnsStatusForEveryMonitoredGame`
+  13. `LimitManagerService_StartAndStop_ManagesLifecycleCorrectly`
 
-- **Total Test Suite**: **49 passed, 0 failed, 0 skipped (Duration: ~780 ms)**.
+- **Total Test Suite**: **62 passed, 0 failed, 0 skipped (Duration: ~740 ms)**.
 
 ### Verification Commands
 ```powershell
@@ -126,5 +134,6 @@ dotnet test GameGuard.slnx
 ```
 
 ### Known Limitations
-- Stage 3 focuses exclusively on time tracking and session persistence. Daily limits, midnight rollovers, remaining quota calculations, and warning thresholds are not evaluated dynamically at runtime (scheduled for Stage 4).
-- Soft warnings, hard game termination, and relaunch suppression are scheduled for Stages 5 and 6.
+- Stage 4 computes limits, emits warnings, and detects quota exhaustion. It deliberately does not perform process termination or kill game processes (scheduled for Stage 5: Game Enforcement Engine).
+- Relaunch suppression and administrator override tokens are scheduled for Stage 6.
+- Desktop UI (WPF MVVM) is scheduled for Stages 7, 8, and 9.

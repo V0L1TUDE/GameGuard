@@ -1,5 +1,6 @@
 using GameGuard.Core.Interfaces;
 using GameGuard.Core.Services;
+using GameGuard.Infrastructure.Limits;
 using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Native;
 using GameGuard.Infrastructure.Persistence;
@@ -16,6 +17,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISystemClock, SystemClock>();
         services.AddSingleton<IMonotonicClock, MonotonicClock>();
         services.AddSingleton<ILimitCalculator, LimitCalculator>();
+        services.AddSingleton<IDayBoundaryCalculator, DayBoundaryCalculator>();
         return services;
     }
 
@@ -60,6 +62,28 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ILogger<TimeTrackerService>>(),
             checkpointInterval,
             suspensionGapThreshold));
+
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardLimitManagement(
+        this IServiceCollection services,
+        TimeZoneInfo? timeZone = null,
+        IEnumerable<int>? warningThresholdsMinutes = null,
+        TimeSpan? evaluationInterval = null)
+    {
+        services.AddSingleton<ILimitManagerService>(sp => new LimitManagerService(
+            sp.GetRequiredService<IGameProfileRepository>(),
+            sp.GetRequiredService<ILimitRepository>(),
+            sp.GetRequiredService<ISessionRepository>(),
+            sp.GetRequiredService<ITimeTrackerService>(),
+            sp.GetRequiredService<ILimitCalculator>(),
+            sp.GetRequiredService<IDayBoundaryCalculator>(),
+            sp.GetRequiredService<ISystemClock>(),
+            sp.GetRequiredService<ILogger<LimitManagerService>>(),
+            timeZone,
+            warningThresholdsMinutes,
+            evaluationInterval));
 
         return services;
     }

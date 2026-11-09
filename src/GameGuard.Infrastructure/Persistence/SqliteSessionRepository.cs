@@ -133,7 +133,8 @@ public sealed class SqliteSessionRepository : ISessionRepository
             FROM GamingSessions
             WHERE GameProfileId = $gameProfileId
               AND StartTimeUtc >= $dayStartUtc
-              AND StartTimeUtc < $dayEndUtc;
+              AND StartTimeUtc < $dayEndUtc
+              AND EndTimeUtc IS NOT NULL;
         ";
         command.Parameters.AddWithValue("$gameProfileId", gameProfileId.ToString());
         command.Parameters.AddWithValue("$dayStartUtc", dayStartUtc.ToString("O"));
@@ -154,7 +155,8 @@ public sealed class SqliteSessionRepository : ISessionRepository
             SELECT COALESCE(SUM(DurationSeconds), 0)
             FROM GamingSessions
             WHERE StartTimeUtc >= $dayStartUtc
-              AND StartTimeUtc < $dayEndUtc;
+              AND StartTimeUtc < $dayEndUtc
+              AND EndTimeUtc IS NOT NULL;
         ";
         command.Parameters.AddWithValue("$dayStartUtc", dayStartUtc.ToString("O"));
         command.Parameters.AddWithValue("$dayEndUtc", dayEndUtc.ToString("O"));
