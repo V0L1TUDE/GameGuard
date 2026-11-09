@@ -11,7 +11,7 @@
 - [x] **Stage 4: Daily Limit Management & Usage Calculation**
 
 ### Phase 3: Enforcement & Protection
-- [ ] **Stage 5: Game Enforcement Engine**
+- [x] **Stage 5: Game Enforcement Engine**
 - [ ] **Stage 6: Relaunch Suppression, Admin Override & Recovery**
 
 ### Phase 4: Desktop Application
@@ -137,3 +137,66 @@ dotnet test GameGuard.slnx
 - Stage 4 computes limits, emits warnings, and detects quota exhaustion. It deliberately does not perform process termination or kill game processes (scheduled for Stage 5: Game Enforcement Engine).
 - Relaunch suppression and administrator override tokens are scheduled for Stage 6.
 - Desktop UI (WPF MVVM) is scheduled for Stages 7, 8, and 9.
+
+---
+
+## Stage 5: Game Enforcement Engine
+
+### Status: COMPLETED
+
+### Objectives
+Implement safe, reliable, and anti-cheat compliant process termination for monitored games when daily limits expire. Support a two-phase termination strategy (graceful `WM_CLOSE` followed by controlled `PROCESS_TERMINATE`), prevent accidental system or unrelated process termination, safeguard against Windows PID reuse, automatically react to `QuotaExhausted` events, and persist session termination states.
+
+### Components Implemented
+1. **Domain Models & Event Contracts (`GameGuard.Core.Models`)**:
+   - `EnforcementMethod`: Enum specifying `GracefulClose`, `ForcedTermination`, or `Failed`.
+   - `EnforcementResult`: Record capturing `GameProfileId`, `GameName`, `ProcessId`, `ProcessName`, `Success`, `MethodUsed`, `TimestampUtc`, and `ErrorMessage`.
+   - `GameEnforcedEventArgs`: Event payload passed whenever an enforcement action completes.
+
+2. **Core Abstractions (`GameGuard.Core.Interfaces`)**:
+   - `IProcessTerminator`: Abstraction for Win32 process termination with graceful timeouts and cancellation support.
+   - `IEnforcementService`: High-level service managing enforcement lifecycle, event subscriptions, safety checks, and session termination updates.
+
+3. **Safe Win32 Native Implementations (`GameGuard.Infrastructure.Native`)**:
+   - `SafeProcessTerminateHandle`: Custom RAII safe handle wrapping `OpenProcess` handles with `CloseHandle`.
+   - `Win32ProcessTerminator`:
+     - **Two-Phase Enforcement**:
+       - *Phase 1 (Graceful)*: Enumerates target process top-level windows using `EnumWindows` and posts non-blocking `WM_CLOSE (0x0010)` messages via `PostMessage`. Waits up to `gracefulTimeout` using `WaitForSingleObject` with `SYNCHRONIZE (0x00100000)` access rights.
+       - *Phase 2 (Controlled Forced Termination)*: If the process does not terminate within the graceful window, requests minimal permission `PROCESS_TERMINATE (0x0001)` and issues `TerminateProcess`.
+     - **Anti-Cheat Safe**: Requests only `SYNCHRONIZE` and `PROCESS_TERMINATE`. Never requests `PROCESS_ALL_ACCESS`, `PROCESS_VM_WRITE`, or `PROCESS_VM_READ`. Injects no threads, modifies no game code, and requires no kernel drivers (100% compliant with Riot Vanguard, Valve Anti-Cheat, Easy Anti-Cheat, and BattlEye).
+
+4. **Enforcement Coordinator Service (`GameGuard.Infrastructure.Enforcement`)**:
+   - `EnforcementService`:
+     - Listens to `ILimitManagerService.QuotaExhausted`.
+     - **Critical System PID Safeguard**: Immediately refuses to terminate PIDs `<= 4` (System, Idle).
+     - **Windows Reused PID Safeguard**: Scans running processes via `IProcessScanner` prior to termination. Verifies that the PID exists and that its executable matches `GameProfile.MatchesProcess(processName)`. If Windows recycled the PID for an unrelated process after the game exited, enforcement is safely aborted.
+     - **Database Integration**: Transitions the active session in SQLite to `SessionTerminationReason.LimitEnforced` with detailed explanatory audit notes.
+     - **Event Emission**: Dispatches `GameEnforced` to notify interested observers.
+
+5. **Dependency Injection**:
+   - Added `AddGameGuardEnforcement` to `ServiceCollectionExtensions`.
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 9 automated unit/integration tests in `EnforcementServiceTests`:
+1. `EnforceGameAsync_WithGracefulExit_ReturnsGracefulSuccessAndRecordsLimitEnforcedInDb`: Verifies graceful window close and SQLite record update.
+2. `EnforceGameAsync_WhenGracefulFails_ForcesTerminationAndRecordsLimitEnforced`: Verifies forced termination fallback when graceful timeout expires.
+3. `EnforceGameAsync_WhenProcessAlreadyExited_ReturnsGracefulSuccessWithoutCallingTerminator`: Verifies handling when the game closes immediately prior to enforcement.
+4. `EnforceGameAsync_WhenTargetPidIsSystem_AbortsAndRefusesToTerminate`: Verifies that critical Windows system PIDs are never targeted.
+5. `EnforceGameAsync_WhenProcessNameMismatched_AbortsDueToReusedPidSafeguard`: Verifies protection against recycled Windows PIDs.
+6. `EnforceGameAsync_WhenTerminationFails_ReturnsFailedResult`: Verifies error reporting when termination fails.
+7. `QuotaExhaustedEvent_TriggersAutomaticEnforcementForActiveGameSessions`: Verifies end-to-end integration from quota exhaustion to automatic game process termination.
+8. `QuotaExhaustedEvent_WhenNoActiveSessions_DoesNotAttemptTermination`: Verifies no-op when games are not running.
+9. `EnforcementService_StartAndStop_ManagesLifecycleAndSubscriptions`: Verifies subscription and lifecycle management.
+
+- **Total Test Suite**: **71 passed, 0 failed, 0 skipped (Duration: ~950 ms)**.
+
+### Verification Commands
+```powershell
+$env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+dotnet build GameGuard.slnx
+dotnet test GameGuard.slnx
+```
+
+### Known Limitations
+- Stage 5 terminates running game processes when quota is exhausted. However, it does not prevent users from immediately relaunching the executable while quota remains exhausted. This is addressed in Stage 6 (Relaunch Suppression, Admin Override & Recovery).
+- Desktop user interface (WPF MVVM) is scheduled for Stages 7, 8, and 9.

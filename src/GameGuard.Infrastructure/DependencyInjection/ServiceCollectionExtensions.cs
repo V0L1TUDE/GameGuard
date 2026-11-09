@@ -1,5 +1,6 @@
 using GameGuard.Core.Interfaces;
 using GameGuard.Core.Services;
+using GameGuard.Infrastructure.Enforcement;
 using GameGuard.Infrastructure.Limits;
 using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Native;
@@ -84,6 +85,22 @@ public static class ServiceCollectionExtensions
             timeZone,
             warningThresholdsMinutes,
             evaluationInterval));
+
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardEnforcement(this IServiceCollection services)
+    {
+        services.AddSingleton<IProcessTerminator, Win32ProcessTerminator>();
+        services.AddSingleton<IEnforcementService>(sp => new EnforcementService(
+            sp.GetRequiredService<ILimitManagerService>(),
+            sp.GetRequiredService<ITimeTrackerService>(),
+            sp.GetRequiredService<IGameProfileRepository>(),
+            sp.GetRequiredService<ISessionRepository>(),
+            sp.GetRequiredService<IProcessTerminator>(),
+            sp.GetRequiredService<IProcessScanner>(),
+            sp.GetRequiredService<ISystemClock>(),
+            sp.GetRequiredService<ILogger<EnforcementService>>()));
 
         return services;
     }
