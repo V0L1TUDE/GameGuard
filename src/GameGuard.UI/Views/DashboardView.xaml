@@ -1,0 +1,124 @@
+<UserControl x:Class="GameGuard.UI.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:viewmodels="clr-namespace:GameGuard.UI.ViewModels"
+             d:DataContext="{d:DesignInstance Type=viewmodels:DashboardViewModel}"
+             mc:Ignorable="d" 
+             d:DesignHeight="600" d:DesignWidth="800">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32,24,32,32">
+            <!-- Header Section -->
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Control Dashboard" Style="{StaticResource PageTitleStyle}" />
+                    <TextBlock Text="Real-time gaming runtime, daily limit status, and active process tracking." 
+                               Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <Button Grid.Column="1" Content="Refresh Status" Command="{Binding RefreshCommand}" Style="{StaticResource OutlineButtonStyle}" />
+            </Grid>
+
+            <!-- KPI Metric Cards Grid -->
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Monitored Games KPI -->
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="MONITORED GAMES" Style="{StaticResource StatLabelStyle}" />
+                        <TextBlock Text="{Binding MonitoredGamesCount}" Style="{StaticResource StatValueStyle}" Margin="0,6,0,0" />
+                        <TextBlock Text="Valve CS2 &amp; Riot Valorant" Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Active Gaming Sessions KPI -->
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="ACTIVE SESSIONS" Style="{StaticResource StatLabelStyle}" />
+                        <TextBlock Text="{Binding ActiveSessionsCount}" Style="{StaticResource StatValueStyle}" Margin="0,6,0,0" />
+                        <TextBlock Text="Processes currently executing" Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Total Minutes Used Today KPI -->
+                <Border Grid.Column="4" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="TOTAL TIME USED TODAY" Style="{StaticResource StatLabelStyle}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <TextBlock Text="{Binding TotalMinutesUsedToday}" Style="{StaticResource StatValueStyle}" />
+                            <TextBlock Text=" min" Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Bottom" Margin="4,0,0,4" />
+                        </StackPanel>
+                        <TextBlock Text="Calculated with local reset boundary" Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Games & Limits Status List -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel>
+                    <TextBlock Text="Live Game Allowances" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,0,16" />
+
+                    <ItemsControl ItemsSource="{Binding GameStatuses}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource ElevatedCardBorderStyle}" Margin="0,0,0,12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="200" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding GameName}" Foreground="{StaticResource BrushTextPrimary}" FontSize="15" FontWeight="Bold" />
+                                            <TextBlock Text="Status: Active Profile" Style="{StaticResource SubtextStyle}" Margin="0,2,0,0" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0">
+                                            <Grid Margin="0,0,0,6">
+                                                <TextBlock Text="Time Used Today" Style="{StaticResource SubtextStyle}" HorizontalAlignment="Left" />
+                                                <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource BrushTextPrimary}" FontWeight="SemiBold">
+                                                    <Run Text="{Binding MinutesUsedToday, Mode=OneWay}" />
+                                                    <Run Text=" / " />
+                                                    <Run Text="{Binding EffectiveLimitMinutes, TargetNullValue='No Limit', Mode=OneWay}" />
+                                                    <Run Text=" min" />
+                                                </TextBlock>
+                                            </Grid>
+                                            <ProgressBar Height="6" Minimum="0" 
+                                                         Maximum="{Binding EffectiveLimitMinutes, TargetNullValue=120}" 
+                                                         Value="{Binding MinutesUsedToday}" 
+                                                         Foreground="{StaticResource BrushAccent}" 
+                                                         Background="{StaticResource BrushBorder}" BorderThickness="0" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                            <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource BrushAccent}" FontWeight="Bold" FontSize="14">
+                                                <Run Text="{Binding MinutesRemaining, TargetNullValue='∞', Mode=OneWay}" />
+                                                <Run Text=" min left" />
+                                            </TextBlock>
+                                            <TextBlock Text="Allowance Available" Style="{StaticResource SubtextStyle}" HorizontalAlignment="Right" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

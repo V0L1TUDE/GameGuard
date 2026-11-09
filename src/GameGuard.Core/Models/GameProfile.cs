@@ -5,6 +5,7 @@ public sealed class GameProfile
     public Guid Id { get; init; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
     public IReadOnlyList<string> ProcessNames { get; set; } = Array.Empty<string>();
+    public string ProcessNamesFormatted => string.Join(", ", ProcessNames);
     public string? ExecutablePath { get; set; }
     public bool IsMonitored { get; set; } = true;
     public DateTime CreatedAtUtc { get; init; } = DateTime.UtcNow;

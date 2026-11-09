@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/GameGuard.Core/GameGuard.Core.csproj" />
     <Project Path="src/GameGuard.Infrastructure/GameGuard.Infrastructure.csproj" />
+    <Project Path="src/GameGuard.UI/GameGuard.UI.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/GameGuard.Core.Tests/GameGuard.Core.Tests.csproj" />

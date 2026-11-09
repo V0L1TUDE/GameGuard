@@ -15,7 +15,7 @@
 - [x] **Stage 6: Relaunch Suppression, Admin Override & Recovery**
 
 ### Phase 4: Desktop Application
-- [ ] **Stage 7: WPF Application Foundation & MVVM Architecture**
+- [x] **Stage 7: WPF Application Foundation & MVVM Architecture**
 - [ ] **Stage 8: Dashboard, Game Configuration & Limit Management UI**
 - [ ] **Stage 9: Session History, Analytics, System Tray & Notifications**
 
@@ -286,3 +286,72 @@ dotnet test GameGuard.slnx
 ### Known Limitations
 - Stage 6 completes Phase 3 (Enforcement & Protection). All core domain, monitoring, time-tracking, limit management, enforcement, and security engines are complete and operate entirely offline without UI dependencies.
 - Next phase is **Phase 4: Desktop Application**, starting with **Stage 7: WPF Application Foundation & MVVM Architecture**.
+
+
+---
+
+## Stage 7: WPF Application Foundation & MVVM Architecture
+
+### Status: COMPLETED
+
+### Objectives
+Scaffold the `GameGuard.UI` WPF desktop presentation layer on .NET 10 LTS (`net10.0-windows`), establish a pure MVVM foundation (`ObservableObject`, `RelayCommand`, `AsyncRelayCommand`, `NavigationService`), implement a modern dark gamer UI theme with cohesive styling and layout grids, integrate Microsoft Dependency Injection to wire up all background monitoring, limit evaluation, and enforcement engines, and construct the shell window (`MainWindow`).
+
+### Components Implemented
+1. **WPF Desktop Project (`src/GameGuard.UI`)**:
+   - Configured for .NET 10 LTS (`net10.0-windows`) with `<UseWPF>true</UseWPF>`.
+   - References `GameGuard.Core` and `GameGuard.Infrastructure`.
+   - Added to solution structure in `GameGuard.slnx`.
+
+2. **MVVM Foundation (`src/GameGuard.UI/Mvvm`)**:
+   - `ObservableObject`: Lightweight `INotifyPropertyChanged` implementation with type-safe `SetProperty<T>` and `CallerMemberName`.
+   - `RelayCommand`: Synchronous `ICommand` implementation with `CanExecuteChanged` integration with `CommandManager.RequerySuggested`.
+   - `AsyncRelayCommand`: Asynchronous `ICommand` supporting `IsExecuting` tracking, reentrancy prevention, and centralized exception handling.
+   - `INavigationService` & `NavigationService`: Decoupled view-model navigation resolving target ViewModels from `IServiceProvider` with automated `InitializeAsync` triggering and lifecycle disposal.
+   - `ViewModelBase`: Base ViewModel with `Title`, `IsBusy`, `InitializeAsync`, and `Dispose` hooks.
+
+3. **Modern Gamer Dark Theme (`src/GameGuard.UI/Themes`)**:
+   - `Colors.xaml`: Deep obsidian background (`#0B0E14`), slate surface cards (`#131722`), elevated hover states (`#1A2030`), crisp borders (`#252C40`), and vibrant gamer accents (cyber emerald `#00E676`, electric cyan `#00D2FF`, coral red `#EF4444`, amber `#F59E0B`).
+   - `Styles.xaml`: Reusable control templates for cards (`CardBorderStyle`, `ElevatedCardBorderStyle`), navigation buttons (`NavButtonStyle`), primary and outline action buttons, and typography presets.
+
+4. **Shell Window & View Hierarchy (`src/GameGuard.UI/Views` & `src/GameGuard.UI/ViewModels`)**:
+   - `MainWindow.xaml`: Modern desktop application shell featuring a left sidebar navigation rail, brand shield icon, live engine status footer (Vanguard & VAC anti-cheat safety badge), top status bar, and central `ContentPresenter`.
+   - `MainViewModel`: Coordinates navigation across pages, tracks live active game session counts via `ITimeTrackerService`, and updates status indicators.
+   - Page ViewModels & Views:
+     - `DashboardViewModel` / `DashboardView`: KPI metric cards (monitored games, active sessions, time used today) and live game allowance progress bars.
+     - `GamesViewModel` / `GamesView`: Monitored games library view.
+     - `LimitsViewModel` / `LimitsView`: Daily allowance configurations.
+     - `HistoryViewModel` / `HistoryView`: Session logs and blocked relaunch audit trail.
+     - `SettingsViewModel` / `SettingsView`: PBKDF2 password security status and active overrides.
+
+5. **Application Hosting & Dependency Injection (`src/GameGuard.UI/App.xaml` & `App.xaml.cs`)**:
+   - Configures SQLite database path in local application data (`%LOCALAPPDATA%\GameGuard\gameguard.db`).
+   - Registers all infrastructure singletons and UI transient view models.
+   - Bootstraps SQLite database initialization on startup.
+   - Asynchronously starts all background engines (`IProcessMonitor`, `ITimeTrackerService`, `ILimitManagerService`, `IEnforcementService`, `IRelaunchSuppressionService`).
+   - Ensures graceful shutdown of background services upon exit.
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 8 new automated unit tests (96 total):
+- `MvvmTests`:
+  1. `ObservableObject_SetProperty_FiresPropertyChangedOnlyWhenValueChanged`: Verifies property change notifications and equality optimization.
+  2. `RelayCommand_ExecutesAndRespectsCanExecute`: Verifies predicate checking and execution.
+  3. `AsyncRelayCommand_TracksIsExecutingAndExecutesTask`: Verifies asynchronous execution and reentrancy locking.
+  4. `AsyncRelayCommand_HandlesExceptionViaCallback`: Verifies exception forwarding to callbacks.
+  5. `NavigationService_NavigatesAndManagesLifecycle`: Verifies view-model navigation, initialization, and disposal of previous views.
+- `MainViewModelTests`:
+  6. `MainViewModel_InitializesAndNavigatesToDashboard`: Verifies startup navigation to dashboard.
+  7. `MainViewModel_NavigationCommands_SwitchCurrentViewModel`: Verifies navigation commands switch to Games, Limits, History, and Settings.
+  8. `MainViewModel_UpdatesActiveSessionCountsLive`: Verifies active session tracking.
+
+- **Total Test Suite**: **96 passed, 0 failed, 0 skipped (Duration: ~690 ms)**.
+
+### Verification Commands
+```powershell
+$env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+dotnet build GameGuard.slnx
+dotnet test GameGuard.slnx
+```
+
+### Known Limitations
+- Stage 7 provides the foundational shell, navigation infrastructure, themes, and read views for the MVVM desktop client. Interactive dialogs for creating/editing game profiles, setting custom daily limits, and entering admin override PINs are implemented in Stage 8.
