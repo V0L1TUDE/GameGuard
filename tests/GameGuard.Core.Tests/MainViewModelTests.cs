@@ -200,16 +200,4 @@ public sealed class MainViewModelTests : IDisposable
         public Task<int> GetBlockCountForGameTodayAsync(Guid gameProfileId, DateTime dayStartUtc, DateTime dayEndUtc, CancellationToken cancellationToken = default)
             => Task.FromResult(0);
     }
-
-    private sealed class MockAdminOverrideRepository : IAdminOverrideRepository
-    {
-        public Task<IReadOnlyList<AdminOverride>> GetActiveOverridesAsync(DateTime nowUtc, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<AdminOverride>>(Array.Empty<AdminOverride>());
-        public Task<AdminOverride?> GetActiveOverrideForGameAsync(Guid gameProfileId, DateTime nowUtc, CancellationToken cancellationToken = default)
-            => Task.FromResult<AdminOverride?>(null);
-        public Task AddOverrideAsync(AdminOverride adminOverride, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task RevokeOverrideAsync(Guid overrideId, DateTime revokedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<AdminOverride>> GetOverrideHistoryAsync(int limit = 50, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<AdminOverride>>(Array.Empty<AdminOverride>());
-    }
 }

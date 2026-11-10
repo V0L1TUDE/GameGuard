@@ -1,6 +1,8 @@
 using System.IO;
 using System.Windows;
 using GameGuard.Core.Interfaces;
+using GameGuard.Core.Ipc;
+using GameGuard.Core.Models;
 using GameGuard.Infrastructure.DependencyInjection;
 using GameGuard.Infrastructure.Notifications;
 using GameGuard.Infrastructure.Persistence;
@@ -50,6 +52,39 @@ public partial class App : Application
         // Start notification dispatcher service
         _serviceProvider.GetRequiredService<NotificationDispatcherService>();
 
+        // If background service is active, connect IPC client and hook push notifications
+        var ipcClient = _serviceProvider.GetRequiredService<IIpcClient>();
+        if (_isServiceActive)
+        {
+            _ = Task.Run(async () =>
+            {
+                bool connected = await ipcClient.ConnectAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                if (connected)
+                {
+                    ipcClient.EventReceived += (_, msg) =>
+                    {
+                        if (msg.Action == IpcActions.NotificationEvent && !string.IsNullOrWhiteSpace(msg.PayloadJson))
+                        {
+                            var notif = System.Text.Json.JsonSerializer.Deserialize<NotificationEventPayload>(msg.PayloadJson);
+                            if (notif != null)
+                            {
+                                var notifService = _serviceProvider.GetRequiredService<INotificationService>();
+                                notifService.ShowNotification(notif.Title, notif.Message, (NotificationType)notif.NotificationType);
+                            }
+                        }
+                        else if (msg.Action == IpcActions.SessionUpdatedEvent)
+                        {
+                            Application.Current?.Dispatcher?.Invoke(() =>
+                            {
+                                var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
+                                mainVm.UpdateActiveSessionCounts();
+                            });
+                        }
+                    };
+                }
+            });
+        }
+
         // Launch Shell Window
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
 
@@ -78,6 +113,7 @@ public partial class App : Application
         services.AddGameGuardRelaunchSuppression();
         services.AddGameGuardAnalytics();
         services.AddGameGuardNotifications();
+        services.AddGameGuardIpcClient();
 
         // MVVM & UI Services
         services.AddSingleton<IDialogService, WpfDialogService>();
@@ -98,6 +134,7 @@ public partial class App : Application
         {
             try
             {
+                _serviceProvider.GetService<IIpcClient>()?.Dispose();
                 _serviceProvider.GetService<ISystemTrayManager>()?.Dispose();
                 _serviceProvider.GetService<NotificationDispatcherService>()?.Dispose();
 

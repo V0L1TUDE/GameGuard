@@ -1,7 +1,9 @@
 using GameGuard.Core.Interfaces;
+using GameGuard.Core.Ipc;
 using GameGuard.Core.Services;
 using GameGuard.Infrastructure.Analytics;
 using GameGuard.Infrastructure.Enforcement;
+using GameGuard.Infrastructure.Ipc;
 using GameGuard.Infrastructure.Limits;
 using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Native;
@@ -139,6 +141,22 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<INotificationService, NotificationService>();
         services.AddSingleton<NotificationDispatcherService>();
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardIpcServer(this IServiceCollection services, string pipeName = NamedPipeIpcServer.DefaultPipeName)
+    {
+        services.AddSingleton<IIpcServer>(sp => new NamedPipeIpcServer(
+            pipeName,
+            sp.GetService<ILogger<NamedPipeIpcServer>>()));
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardIpcClient(this IServiceCollection services, string pipeName = NamedPipeIpcServer.DefaultPipeName)
+    {
+        services.AddSingleton<IIpcClient>(sp => new NamedPipeIpcClient(
+            pipeName,
+            sp.GetService<ILogger<NamedPipeIpcClient>>()));
         return services;
     }
 }

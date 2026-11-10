@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
 using GameGuard.Core.Interfaces;
+using GameGuard.Core.Ipc;
 using GameGuard.Core.Models;
 using GameGuard.UI.Mvvm;
 using GameGuard.UI.Services;
@@ -17,6 +18,7 @@ public sealed class DashboardViewModel : ViewModelBase
     private readonly IEnforcementService _enforcementService;
     private readonly IAdminAuthService _authService;
     private readonly IDialogService _dialogService;
+    private readonly IIpcClient? _ipcClient;
 
     private readonly DispatcherTimer? _liveTicker;
     private int _monitoredGamesCount;
@@ -63,7 +65,8 @@ public sealed class DashboardViewModel : ViewModelBase
         IAdminOverrideRepository overrideRepository,
         IEnforcementService enforcementService,
         IAdminAuthService authService,
-        IDialogService dialogService)
+        IDialogService dialogService,
+        IIpcClient? ipcClient = null)
     {
         _limitManager = limitManager;
         _timeTracker = timeTracker;
@@ -72,6 +75,7 @@ public sealed class DashboardViewModel : ViewModelBase
         _enforcementService = enforcementService;
         _authService = authService;
         _dialogService = dialogService;
+        _ipcClient = ipcClient;
 
         Title = "Dashboard";
 
@@ -230,14 +234,24 @@ public sealed class DashboardViewModel : ViewModelBase
             return;
         }
 
-        var overrideRecord = AdminOverride.CreateBonusTime(
-            session.GameProfileId,
-            15,
-            DateTime.UtcNow,
-            TimeSpan.FromHours(2),
-            $"Quick +15m bonus granted for {session.GameName}");
+        if (_ipcClient != null && _ipcClient.IsConnected)
+        {
+            await _ipcClient.SendRequestAsync<GrantBonusRequest, CommandResultResponse>(
+                IpcActions.GrantBonus,
+                new GrantBonusRequest(session.GameProfileId, 15, $"Quick +15m bonus granted for {session.GameName}"));
+        }
+        else
+        {
+            var overrideRecord = AdminOverride.CreateBonusTime(
+                session.GameProfileId,
+                15,
+                DateTime.UtcNow,
+                TimeSpan.FromHours(2),
+                $"Quick +15m bonus granted for {session.GameName}");
 
-        await _overrideRepository.AddOverrideAsync(overrideRecord);
+            await _overrideRepository.AddOverrideAsync(overrideRecord);
+        }
+
         await LoadDashboardDataAsync();
         await _dialogService.ShowMessageAsync("Bonus Playtime Granted", $"+15 minutes bonus granted to '{session.GameName}'.");
     }
@@ -263,10 +277,19 @@ public sealed class DashboardViewModel : ViewModelBase
             return;
         }
 
-        var game = await _gameRepository.GetByIdAsync(session.GameProfileId);
-        if (game != null)
+        if (_ipcClient != null && _ipcClient.IsConnected)
         {
-            await _enforcementService.EnforceGameAsync(game, session.ProcessId, session.ProcessName);
+            await _ipcClient.SendRequestAsync<EndSessionRequest, CommandResultResponse>(
+                IpcActions.EndSession,
+                new EndSessionRequest(session.ProcessId, "Session terminated manually by admin via UI"));
+        }
+        else
+        {
+            var game = await _gameRepository.GetByIdAsync(session.GameProfileId);
+            if (game != null)
+            {
+                await _enforcementService.EnforceGameAsync(game, session.ProcessId, session.ProcessName);
+            }
         }
 
         await LoadDashboardDataAsync();
@@ -293,22 +316,31 @@ public sealed class DashboardViewModel : ViewModelBase
             return;
         }
 
-        var lockOverride = AdminOverride.CreateEmergencyLock(
-            result.GameProfileId,
-            DateTime.UtcNow,
-            TimeSpan.FromHours(2),
-            $"Emergency lockdown applied to {result.GameName}");
-
-        await _overrideRepository.AddOverrideAsync(lockOverride);
-
-        // Terminate any active sessions for this game
-        var activeSessions = _timeTracker.GetActiveSessions().Where(s => s.GameProfileId == result.GameProfileId).ToList();
-        var game = await _gameRepository.GetByIdAsync(result.GameProfileId);
-        if (game != null)
+        if (_ipcClient != null && _ipcClient.IsConnected)
         {
-            foreach (var act in activeSessions)
+            await _ipcClient.SendRequestAsync<EmergencyLockRequest, CommandResultResponse>(
+                IpcActions.EmergencyLock,
+                new EmergencyLockRequest(result.GameProfileId, $"Emergency lockdown applied to {result.GameName}"));
+        }
+        else
+        {
+            var lockOverride = AdminOverride.CreateEmergencyLock(
+                result.GameProfileId,
+                DateTime.UtcNow,
+                TimeSpan.FromHours(2),
+                $"Emergency lockdown applied to {result.GameName}");
+
+            await _overrideRepository.AddOverrideAsync(lockOverride);
+
+            // Terminate any active sessions for this game
+            var activeSessions = _timeTracker.GetActiveSessions().Where(s => s.GameProfileId == result.GameProfileId).ToList();
+            var game = await _gameRepository.GetByIdAsync(result.GameProfileId);
+            if (game != null)
             {
-                await _enforcementService.EnforceGameAsync(game, act.ProcessId, act.ProcessName);
+                foreach (var act in activeSessions)
+                {
+                    await _enforcementService.EnforceGameAsync(game, act.ProcessId, act.ProcessName);
+                }
             }
         }
 

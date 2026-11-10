@@ -14,7 +14,10 @@ public sealed class GameGuardWorkerTests
     private readonly MockLimitManagerService _limitManager;
     private readonly MockEnforcementService _enforcementService;
     private readonly MockRelaunchSuppressionService _relaunchService;
+    private readonly MockAdminOverrideRepository _overrideRepository;
+    private readonly MockGameProfileRepository _profileRepository;
     private readonly ClockTamperDetector _tamperDetector;
+    private readonly MockIpcServer _ipcServer;
     private readonly MockSystemClock _clock;
     private readonly GameGuardWorker _worker;
 
@@ -26,7 +29,10 @@ public sealed class GameGuardWorkerTests
         _limitManager = new MockLimitManagerService();
         _enforcementService = new MockEnforcementService();
         _relaunchService = new MockRelaunchSuppressionService();
+        _overrideRepository = new MockAdminOverrideRepository();
+        _profileRepository = new MockGameProfileRepository();
         _tamperDetector = new ClockTamperDetector(NullLogger<ClockTamperDetector>.Instance);
+        _ipcServer = new MockIpcServer();
         _clock = new MockSystemClock();
 
         _worker = new GameGuardWorker(
@@ -36,7 +42,10 @@ public sealed class GameGuardWorkerTests
             _limitManager,
             _enforcementService,
             _relaunchService,
+            _overrideRepository,
+            _profileRepository,
             _tamperDetector,
+            _ipcServer,
             _clock,
             NullLogger<GameGuardWorker>.Instance);
     }
@@ -57,6 +66,7 @@ public sealed class GameGuardWorkerTests
         Assert.True(_limitManager.StartCalled);
         Assert.True(_enforcementService.StartCalled);
         Assert.True(_relaunchService.StartCalled);
+        Assert.True(_ipcServer.StartCalled);
 
         cts.Cancel();
         await _worker.StopAsync(CancellationToken.None);
@@ -65,5 +75,6 @@ public sealed class GameGuardWorkerTests
         Assert.True(_limitManager.StopCalled);
         Assert.True(_enforcementService.StopCalled);
         Assert.True(_relaunchService.StopCalled);
+        Assert.True(_ipcServer.StopCalled);
     }
 }

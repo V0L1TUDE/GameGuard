@@ -68,6 +68,7 @@ public static class Program
         builder.Services.AddGameGuardRelaunchSuppression();
         builder.Services.AddGameGuardAnalytics();
         builder.Services.AddGameGuardNotifications();
+        builder.Services.AddGameGuardIpcServer();
 
         // Register the background worker daemon
         builder.Services.AddHostedService<GameGuardWorker>();

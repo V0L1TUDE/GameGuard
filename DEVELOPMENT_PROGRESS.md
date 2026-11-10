@@ -21,7 +21,7 @@
 
 ### Phase 5: Background Architecture
 - [x] **Stage 10: Windows Background Service & Monitoring Extraction**
-- [ ] **Stage 11: Named Pipes IPC, Service Recovery & Security**
+- [x] **Stage 11: Named Pipes IPC, Service Recovery & Security**
 
 ### Phase 6: Production Readiness
 - [ ] **Stage 12: Integration Testing, Optimization, Packaging & Release**
@@ -588,5 +588,78 @@ dotnet run --project src/GameGuard.UI/GameGuard.UI.csproj
 ### Known Limitations
 - Stage 10 extracts and runs the headless background service daemon with Windows SCM integration.
 - Stage 11 establishes real-time Named Pipes Inter-Process Communication (IPC) between `GameGuard.Service` and `GameGuard.UI` for instantaneous push notifications, remote session termination, and live status streaming.
+
+
+---
+
+## Stage 11: Named Pipes IPC, Service Recovery & Security
+
+### Status: COMPLETED
+
+### Objectives
+Establish a secure, high-throughput local Named Pipes Inter-Process Communication (IPC) bridge between the headless background Windows daemon (`GameGuard.Service`) and the presentation UI (`GameGuard.UI`). Deliver two-way asynchronous request/response command routing (`GetStatus`, `GrantBonus`, `EmergencyLock`, `EndSession`), real-time push event broadcasting (`NotificationEvent`, `SessionUpdatedEvent`), tamper-safe Windows pipe security ACLs, frame-level size bounding to defend against buffer exhaustion, and resilient auto-reconnection with fallback.
+
+### Components Implemented
+1. **Core IPC Contracts & Protocol (`src/GameGuard.Core/Ipc`)**:
+   - `IpcMessage`: Typed message envelope supporting `Request`, `Response`, and `Event` frames with correlation IDs and JSON payloads.
+   - `IpcContracts`: Strongly typed request/response/event records:
+     - `GrantBonusRequest`, `EmergencyLockRequest`, `EndSessionRequest`
+     - `CommandResultResponse`, `ServiceStatusResponse`, `ActiveSessionInfo`
+     - `NotificationEventPayload`
+   - `IIpcServer`: Service abstraction for starting the pipe server, registering action handlers, and broadcasting push events.
+   - `IIpcClient`: Client abstraction for connection lifecycle, async request dispatch, and push event subscription.
+
+2. **Secure Named Pipe Transport (`src/GameGuard.Infrastructure/Ipc`)**:
+   - `IpcMessageFramer`: Length-prefixed framing (4-byte binary length header + UTF-8 JSON payload). Enforces a strict 1 MB payload ceiling to prevent buffer exhaustion attacks.
+   - `NamedPipeIpcServer`:
+     - Asynchronous multithreaded server listening on `\\.\pipe\GameGuard_IPC_Pipe`.
+     - **Windows ACL Security**: Configures `PipeSecurity` via `NamedPipeServerStreamAcl` granting Read/Write to `AuthenticatedUserSid` and Full Control to `BuiltinAdministratorsSid` and `LocalSystemSid`, preventing pipe squatting while allowing standard desktop users to interact.
+     - Per-client thread-safe dispatch and broadcast queues using `SemaphoreSlim` write locks.
+   - `NamedPipeIpcClient`:
+     - Asynchronous pipe client with non-blocking connection timeouts and auto-recovery.
+     - Correlation-based request/response multiplexing via `TaskCompletionSource<IpcMessage>`.
+     - Dispatches incoming server-pushed notifications to `EventReceived`.
+
+3. **Background Daemon IPC Dispatcher (`src/GameGuard.Service`)**:
+   - `GameGuardWorker`:
+     - Registers IPC handlers for `GetStatus`, `GrantBonus`, `EmergencyLock`, and `EndSession`.
+     - Forwards domain events (`LimitWarningIssued`, `GracePeriodStarted`, `GameEnforced`, `RelaunchBlocked`, `SessionStarted`, `SessionEnded`) directly to connected UI clients in real time.
+   - `Program.cs`: Bootstraps `AddGameGuardIpcServer()`.
+
+4. **Desktop UI Client Integration (`src/GameGuard.UI`)**:
+   - `App.xaml.cs`: Registers `AddGameGuardIpcClient()`. When the background service is detected active, connects to the pipe and routes pushed notification events to `INotificationService` and `MainViewModel`.
+   - `DashboardViewModel`: Dynamically dispatches `QuickBonus15m`, `EndSessionNow`, and `EmergencyLock` over IPC to the background daemon when connected, falling back to direct in-process execution in standalone mode.
+
+5. **Unit & Integration Testing (`tests/GameGuard.Core.Tests`)**:
+   - Added `IpcMessageFramerTests`:
+     - `WriteAndRead_RoundtripsSuccessfully`
+     - `Read_WhenStreamEmpty_ReturnsNull`
+     - `Read_WhenOversizedLength_ThrowsException`
+   - Added `NamedPipeIpcTests`:
+     - `Client_ConnectsToServer_AndExchangesGetStatusRequestResponse`
+     - `Client_SendsGrantBonusRequest_ServerExecutesAndReturnsSuccess`
+     - `Server_BroadcastsEvent_ClientReceivesEvent`
+   - Added `MockIpcServer` and `MockAdminOverrideRepository`.
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 6 new automated unit and integration tests (126 total):
+- `IpcMessageFramerTests`: 3 passed
+- `NamedPipeIpcTests`: 3 passed
+
+- **Total Test Suite**: **126 passed, 0 failed, 0 skipped (Duration: ~1.0 s)**.
+
+### Verification Commands
+```powershell
+$env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+dotnet build GameGuard.slnx
+dotnet test GameGuard.slnx
+dotnet run --project src/GameGuard.Service/GameGuard.Service.csproj -- --status
+dotnet run --project src/GameGuard.UI/GameGuard.UI.csproj
+```
+
+### Known Limitations
+- Stage 11 completes Phase 5 (Background Architecture). The full multi-tier architecture (Domain Core $\to$ SQLite $\to$ Native Monitoring $\to$ Limit Enforcement $\to$ Windows Service Daemon $\to$ Named Pipes IPC $\to$ WPF MVVM UI) is fully operational.
+- Stage 12 is the final stage: **Integration Testing, Optimization, Packaging & Release**.
+
 
 
