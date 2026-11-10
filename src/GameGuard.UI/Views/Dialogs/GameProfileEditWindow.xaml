@@ -2,22 +2,23 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Game Profile Configuration"
-        Height="420" Width="520"
+        SizeToContent="Height"
+        Width="540"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Background="{StaticResource BrushBackground}">
 
-    <Border Padding="28" Background="{StaticResource BrushSurface}">
+    <Border Padding="24" Background="{StaticResource BrushSurface}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Header -->
-            <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <StackPanel Grid.Row="0" Margin="0,0,0,16">
                 <TextBlock x:Name="TitleText" Text="Configure Game Profile" Style="{StaticResource SectionHeaderStyle}" />
                 <TextBlock Text="Set game details and process names for zero-injection monitoring." Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
             </StackPanel>
@@ -26,11 +27,11 @@
             <StackPanel Grid.Row="1">
                 <!-- Game Name -->
                 <TextBlock Text="Game Title" Style="{StaticResource StatLabelStyle}" Margin="0,0,0,6" />
-                <TextBox x:Name="NameInput" Style="{StaticResource DarkTextBoxStyle}" Margin="0,0,0,16" />
+                <TextBox x:Name="NameInput" Style="{StaticResource DarkTextBoxStyle}" Margin="0,0,0,14" />
 
                 <!-- Executable Path with Browse -->
                 <TextBlock Text="Executable Path (Optional)" Style="{StaticResource StatLabelStyle}" Margin="0,0,0,6" />
-                <Grid Margin="0,0,0,16">
+                <Grid Margin="0,0,0,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -41,7 +42,7 @@
 
                 <!-- Process Names -->
                 <TextBlock Text="Process Names (comma separated, e.g. cs2.exe, cs2)" Style="{StaticResource StatLabelStyle}" Margin="0,0,0,6" />
-                <TextBox x:Name="ProcessNamesInput" Style="{StaticResource DarkTextBoxStyle}" Margin="0,0,0,16" />
+                <TextBox x:Name="ProcessNamesInput" Style="{StaticResource DarkTextBoxStyle}" Margin="0,0,0,14" />
 
                 <!-- Is Monitored Checkbox -->
                 <CheckBox x:Name="MonitoredCheck" Content="Enable Active Runtime Monitoring" Style="{StaticResource DarkCheckBoxStyle}" IsChecked="True" />
