@@ -10,6 +10,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="32,24,32,32">
+            <!-- Header with Actions -->
             <Grid Margin="0,0,0,24">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -18,33 +19,73 @@
 
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Monitored Games Library" Style="{StaticResource PageTitleStyle}" />
-                    <TextBlock Text="Profiles configured for anti-cheat safe process scanning and runtime management." 
+                    <TextBlock Text="Configure game applications, executable target paths, and process matching." 
                                Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
                 </StackPanel>
 
-                <Button Grid.Column="1" Content="Refresh Games" Command="{Binding RefreshCommand}" Style="{StaticResource OutlineButtonStyle}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,10,0" />
+                    <Button Content="+ Add Game" Command="{Binding AddGameCommand}" Style="{StaticResource PrimaryButtonStyle}" />
+                </StackPanel>
             </Grid>
 
+            <!-- Games List -->
             <ItemsControl ItemsSource="{Binding Games}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
+                        <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,14">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SectionHeaderStyle}" />
-                                    <TextBlock Text="Target Process Names:" Style="{StaticResource SubtextStyle}" Margin="0,6,0,2" />
-                                    <TextBlock Text="{Binding ProcessNamesFormatted}" Foreground="{StaticResource BrushAccentCyan}" FontWeight="Medium" FontSize="13" />
+                                <!-- Game Details -->
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,12,0" />
+                                        <Border Background="{StaticResource BrushSurfaceElevated}" CornerRadius="10" Padding="8,2">
+                                            <TextBlock Text="{Binding IsMonitored, Converter={x:Null}}" 
+                                                       FontSize="11" FontWeight="Bold"
+                                                       Foreground="{StaticResource BrushAccent}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="ACTIVE" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsMonitored}" Value="False">
+                                                                <Setter Property="Text" Value="PAUSED" />
+                                                                <Setter Property="Foreground" Value="{StaticResource BrushTextMuted}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!-- Process Names Tag -->
+                                    <TextBlock Text="Process Names:" Style="{StaticResource SubtextStyle}" Margin="0,8,0,2" />
+                                    <TextBlock Text="{Binding ProcessNamesFormatted}" Foreground="{StaticResource BrushAccentCyan}" FontWeight="SemiBold" FontSize="13" />
+
+                                    <!-- Executable Path if available -->
+                                    <TextBlock Text="{Binding ExecutablePath, TargetNullValue='No specific path bound (scans all instances)'}" 
+                                               Foreground="{StaticResource BrushTextMuted}" FontSize="11" Margin="0,4,0,0" />
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                    <Border Background="{StaticResource BrushSurfaceElevated}" CornerRadius="12" Padding="12,4">
-                                        <TextBlock Text="MONITORED" Foreground="{StaticResource BrushAccent}" FontWeight="Bold" FontSize="11" />
-                                    </Border>
+                                <!-- Action Buttons -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                    <Button Content="Toggle Active" 
+                                            Command="{Binding DataContext.ToggleMonitoredCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                            CommandParameter="{Binding}" 
+                                            Style="{StaticResource OutlineButtonStyle}" Height="32" Margin="0,0,8,0" />
+                                    <Button Content="Edit" 
+                                            Command="{Binding DataContext.EditGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                            CommandParameter="{Binding}" 
+                                            Style="{StaticResource OutlineButtonStyle}" Height="32" Margin="0,0,8,0" />
+                                    <Button Content="Delete" 
+                                            Command="{Binding DataContext.DeleteGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                            CommandParameter="{Binding}" 
+                                            Style="{StaticResource DangerButtonStyle}" Height="32" />
                                 </StackPanel>
                             </Grid>
                         </Border>

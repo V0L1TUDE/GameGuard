@@ -16,7 +16,7 @@
 
 ### Phase 4: Desktop Application
 - [x] **Stage 7: WPF Application Foundation & MVVM Architecture**
-- [ ] **Stage 8: Dashboard, Game Configuration & Limit Management UI**
+- [x] **Stage 8: Dashboard, Game Configuration & Limit Management UI**
 - [ ] **Stage 9: Session History, Analytics, System Tray & Notifications**
 
 ### Phase 5: Background Architecture
@@ -355,3 +355,75 @@ dotnet test GameGuard.slnx
 
 ### Known Limitations
 - Stage 7 provides the foundational shell, navigation infrastructure, themes, and read views for the MVVM desktop client. Interactive dialogs for creating/editing game profiles, setting custom daily limits, and entering admin override PINs are implemented in Stage 8.
+
+
+---
+
+## Stage 8: Dashboard, Game Configuration & Limit Management UI
+
+### Status: COMPLETED
+
+### Objectives
+Transform the read-only presentation client into a fully interactive gaming management interface. Enable custom game profile creation with executable file browsing and process tag parsing, comprehensive daily limit configuration for shared pools and dedicated game maximums, live active game countdown card on the Dashboard with instant bonus granting and session termination, and PBKDF2 administrator authorization protecting all configuration modifications.
+
+### Components Implemented
+1. **Dialog Service Abstraction & Models (`src/GameGuard.UI/Services`)**:
+   - `IDialogService`: MVVM dialog abstraction covering confirmation prompts, message alerts, executable file picker, password dialogs, game profile editor dialogs, and override dialogs.
+   - `GameProfileEditModel`: DTO for game profile creation and editing.
+   - `AdminOverrideCreateModel`: DTO for configuring bonus time, temporary unlocks, and emergency lockdowns.
+   - `WpfDialogService`: WPF implementation executing dialogs on the UI thread modal to `Application.Current.MainWindow`.
+
+2. **Custom Dark-Themed Dialog Windows (`src/GameGuard.UI/Views/Dialogs`)**:
+   - `MessageConfirmWindow`: Dark-themed confirmation and alert dialog.
+   - `PasswordPromptWindow`: Masked password entry modal with validation error feedback.
+   - `GameProfileEditWindow`: Game registration window featuring title, executable path input with `OpenFileDialog` browse button, auto-extraction of game title and process name, process tag list, and monitoring toggle.
+   - `AddOverrideWindow`: Dropdown game selector, override strategy picker (`BonusTime`, `TemporaryUnlock`, `EmergencyLock`), duration/minutes input, and audit reason text.
+
+3. **Interactive ViewModels & Views (`src/GameGuard.UI/ViewModels` & `Views`)**:
+   - `GamesViewModel` & `GamesView`:
+     - Added `AddGameCommand`, `EditGameCommand`, `DeleteGameCommand`, and `ToggleMonitoredCommand`.
+     - Automatically verifies admin password before executing any modifications.
+     - Parses comma-separated process names into clean executable tags.
+   - `LimitsViewModel` & `LimitsView`:
+     - **Shared Daily Pool**: Sliders for daily minutes (15–480m), grace period seconds (0–300s), and reset hour (0–23 UTC), with pool enable toggle and save button.
+     - **Individual Dedicated Limits**: `GameLimitItemViewModel` list with dedicated sliders and per-game save buttons.
+   - `DashboardViewModel` & `DashboardView`:
+     - **Live Active Session Card**: Prominent banner displaying running games with live 1-second ticking stopwatch (`ActiveSessionDisplayModel`), process ID, and remaining allowance.
+     - Quick Action: `QuickBonus15mCommand` grants $+15\text{m}$ bonus time directly from the live card.
+     - Quick Action: `EndSessionNowCommand` terminates running session immediately via `IEnforcementService`.
+     - Quick Action: `EmergencyLockCommand` locks down game and closes active sessions.
+   - `SettingsViewModel` & `SettingsView`:
+     - Interactive admin password creation and modification with password confirmation.
+     - `CreateOverrideCommand` applying custom overrides to SQLite.
+     - `RevokeOverrideCommand` instantly revoking active overrides.
+
+4. **Test Doubles & Unit Testing (`tests/GameGuard.Core.Tests`)**:
+   - Added `MockDialogService`, `MockEnforcementService`, `MockAdminAuthService`, and `MockLimitManagerService`.
+   - Added 10 automated unit tests in `InteractiveUiTests.cs` validating all interactive view-model commands headlessly.
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 10 new automated unit tests (106 total):
+- `InteractiveUiTests`:
+  1. `GamesViewModel_AddGameCommand_AddsNewProfileToRepository`
+  2. `GamesViewModel_EditGameCommand_UpdatesProfileInRepository`
+  3. `GamesViewModel_DeleteGameCommand_WhenConfirmed_RemovesFromRepository`
+  4. `LimitsViewModel_SaveSharedLimitCommand_SavesSharedPool`
+  5. `LimitsViewModel_SaveIndividualLimit_SavesSpecificGameAllowance`
+  6. `DashboardViewModel_QuickBonus15mCommand_AppliesBonusTimeOverride`
+  7. `DashboardViewModel_EndSessionNowCommand_InvokesEnforcementService`
+  8. `DashboardViewModel_EmergencyLockCommand_AppliesLockOverrideAndTerminates`
+  9. `SettingsViewModel_SetOrChangePasswordCommand_ConfiguresPassword`
+  10. `SettingsViewModel_CreateAndRevokeOverride_UpdatesRepository`
+
+- **Total Test Suite**: **106 passed, 0 failed, 0 skipped (Duration: ~770 ms)**.
+
+### Verification Commands
+```powershell
+$env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+dotnet build GameGuard.slnx
+dotnet test GameGuard.slnx
+```
+
+### Known Limitations
+- Stage 8 completes all interactive dialogs, limits configuration, and profile management for the desktop client.
+- Historical session analytics graphs, system tray minimization, and Windows toast alerts are scheduled for Stage 9.

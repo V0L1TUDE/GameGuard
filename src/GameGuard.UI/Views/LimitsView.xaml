@@ -6,10 +6,11 @@
              xmlns:viewmodels="clr-namespace:GameGuard.UI.ViewModels"
              d:DataContext="{d:DesignInstance Type=viewmodels:LimitsViewModel}"
              mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="800">
+             d:DesignHeight="700" d:DesignWidth="850">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="32,24,32,32">
+            <!-- Header -->
             <Grid Margin="0,0,0,24">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -17,42 +18,140 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="Daily Gaming Limits" Style="{StaticResource PageTitleStyle}" />
-                    <TextBlock Text="Configure shared gaming pool or per-game daily allowances." 
+                    <TextBlock Text="Daily Gaming Limits &amp; Quotas" Style="{StaticResource PageTitleStyle}" />
+                    <TextBlock Text="Manage shared gaming pools, individual game allowances, and reset hours." 
                                Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
                 </StackPanel>
 
-                <Button Grid.Column="1" Content="Refresh Limits" Command="{Binding RefreshCommand}" Style="{StaticResource OutlineButtonStyle}" />
+                <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" Style="{StaticResource OutlineButtonStyle}" />
             </Grid>
 
-            <ItemsControl ItemsSource="{Binding Limits}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,16">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+            <!-- 1. Shared Daily Pool Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24">
+                <StackPanel>
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="Daily Time Allowance" Style="{StaticResource SectionHeaderStyle}" />
-                                    <TextBlock Text="Reset Hour (UTC):" Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
-                                    <TextBlock Text="{Binding ResetHourUtc}" Foreground="{StaticResource BrushTextPrimary}" FontWeight="SemiBold" />
-                                </StackPanel>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Shared Gaming Allowance Pool" Style="{StaticResource SectionHeaderStyle}" />
+                            <TextBlock Text="Limits total combined gameplay across all monitored games each day." Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
+                        </StackPanel>
 
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding DailyLimitMinutes}" Style="{StaticResource StatValueStyle}" />
-                                        <TextBlock Text=" minutes" Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Bottom" Margin="4,0,0,4" />
-                                    </StackPanel>
-                                    <TextBlock Text="Daily Max" Style="{StaticResource SubtextStyle}" HorizontalAlignment="Right" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                        <CheckBox Grid.Column="1" Content="Enable Pool" IsChecked="{Binding IsSharedLimitActive}" Style="{StaticResource DarkCheckBoxStyle}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                            <TextBlock Text="Daily Max Allowance" Style="{StaticResource StatLabelStyle}" Margin="0,0,0,8" />
+                            <Slider Minimum="15" Maximum="480" SmallChange="5" LargeChange="30" Value="{Binding SharedLimitMinutes}" Margin="0,0,0,6" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Width="100">
+                            <TextBlock Text="{Binding SharedLimitMinutes}" Style="{StaticResource StatValueStyle}" HorizontalAlignment="Right" />
+                            <TextBlock Text="minutes / day" Style="{StaticResource SubtextStyle}" HorizontalAlignment="Right" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Grace & Reset Hour Row -->
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="20" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Grace Period (Seconds before shutdown)" Style="{StaticResource StatLabelStyle}" Margin="0,0,0,6" />
+                            <Slider Minimum="0" Maximum="300" SmallChange="10" Value="{Binding SharedGracePeriodSeconds}" />
+                            <TextBlock Margin="0,4,0,0" Foreground="{StaticResource BrushTextSecondary}" FontSize="12">
+                                <Run Text="{Binding SharedGracePeriodSeconds}" />
+                                <Run Text=" seconds grace countdown" />
+                            </TextBlock>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Daily Reset Hour (0 = Midnight UTC)" Style="{StaticResource StatLabelStyle}" Margin="0,0,0,6" />
+                            <Slider Minimum="0" Maximum="23" SmallChange="1" Value="{Binding SharedResetHour}" />
+                            <TextBlock Margin="0,4,0,0" Foreground="{StaticResource BrushTextSecondary}" FontSize="12">
+                                <Run Text="Resets daily at " />
+                                <Run Text="{Binding SharedResetHour, StringFormat='{}{0:D2}:00 UTC'}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+
+                    <Button Content="Save Shared Pool Limit" Command="{Binding SaveSharedLimitCommand}" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Right" Width="190" />
+                </StackPanel>
+            </Border>
+
+            <!-- 2. Individual Game Limits -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel>
+                    <TextBlock Text="Per-Game Dedicated Limits" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,0,4" />
+                    <TextBlock Text="Configure dedicated maximums for individual games (the strictest binding limit will apply)." Style="{StaticResource SubtextStyle}" Margin="0,0,0,18" />
+
+                    <ItemsControl ItemsSource="{Binding IndividualLimits}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource ElevatedCardBorderStyle}" Margin="0,0,0,14">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Header Row -->
+                                        <Grid Grid.Row="0" Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Game.Name}" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,12,0" />
+                                                <CheckBox Content="Active Limit" IsChecked="{Binding IsActive}" Style="{StaticResource DarkCheckBoxStyle}" VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <Button Grid.Column="1" Content="Save Limit" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButtonStyle}" Height="30" Width="100" />
+                                        </Grid>
+
+                                        <!-- Controls Row -->
+                                        <Grid Grid.Row="1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                                <Slider Minimum="10" Maximum="360" SmallChange="5" Value="{Binding DailyLimitMinutes}" Margin="0,0,0,4" />
+                                                <TextBlock Foreground="{StaticResource BrushTextSecondary}" FontSize="12">
+                                                    <Run Text="Dedicated max: " />
+                                                    <Run Text="{Binding DailyLimitMinutes}" FontWeight="Bold" Foreground="{StaticResource BrushTextPrimary}" />
+                                                    <Run Text=" minutes per day (Grace: " />
+                                                    <Run Text="{Binding GracePeriodSeconds}" />
+                                                    <Run Text="s)" />
+                                                </TextBlock>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Width="90">
+                                                <TextBlock Text="{Binding DailyLimitMinutes}" Style="{StaticResource StatValueStyle}" FontSize="22" HorizontalAlignment="Right" />
+                                                <TextBlock Text="min" Style="{StaticResource SubtextStyle}" HorizontalAlignment="Right" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

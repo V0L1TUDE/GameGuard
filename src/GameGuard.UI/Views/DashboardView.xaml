@@ -6,7 +6,7 @@
              xmlns:viewmodels="clr-namespace:GameGuard.UI.ViewModels"
              d:DataContext="{d:DesignInstance Type=viewmodels:DashboardViewModel}"
              mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="800">
+             d:DesignHeight="750" d:DesignWidth="850">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="32,24,32,32">
@@ -19,7 +19,7 @@
 
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Control Dashboard" Style="{StaticResource PageTitleStyle}" />
-                    <TextBlock Text="Real-time gaming runtime, daily limit status, and active process tracking." 
+                    <TextBlock Text="Real-time gaming runtime, live session countdown, and active process tracking." 
                                Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
                 </StackPanel>
 
@@ -41,7 +41,7 @@
                     <StackPanel>
                         <TextBlock Text="MONITORED GAMES" Style="{StaticResource StatLabelStyle}" />
                         <TextBlock Text="{Binding MonitoredGamesCount}" Style="{StaticResource StatValueStyle}" Margin="0,6,0,0" />
-                        <TextBlock Text="Valve CS2 &amp; Riot Valorant" Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
+                        <TextBlock Text="Profiles with active tracking" Style="{StaticResource SubtextStyle}" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
 
@@ -67,10 +67,95 @@
                 </Border>
             </Grid>
 
+            <!-- LIVE ACTIVE SESSIONS SECTION -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24">
+                <StackPanel>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Fill="{StaticResource BrushAccent}" Margin="0,0,8,0" />
+                            <TextBlock Text="Live Active Gaming Sessions" Style="{StaticResource SectionHeaderStyle}" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Column="1" Text="Live Ticking Timer" Style="{StaticResource SubtextStyle}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- When NO active sessions -->
+                    <Border Background="{StaticResource BrushSurfaceElevated}" CornerRadius="8" Padding="20"
+                            Visibility="{Binding ActiveSessionsCount, Converter={x:Null}}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ActiveSessionsCount}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="🛡" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                            <TextBlock Text="No monitored games are currently running. GameGuard background monitor is active." 
+                                       Foreground="{StaticResource BrushTextSecondary}" FontSize="13" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Active Sessions Items -->
+                    <ItemsControl ItemsSource="{Binding ActiveSessionsList}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{StaticResource BrushSurfaceElevated}" BorderBrush="{StaticResource BrushAccent}" BorderThickness="1" CornerRadius="8" Padding="16" Margin="0,0,0,10">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="220" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Game & Process Info -->
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding GameName}" Foreground="{StaticResource BrushTextPrimary}" FontSize="16" FontWeight="Bold" />
+                                            <TextBlock Foreground="{StaticResource BrushTextSecondary}" FontSize="12" Margin="0,2,0,0">
+                                                <Run Text="{Binding ProcessName}" />
+                                                <Run Text=" (PID: " />
+                                                <Run Text="{Binding ProcessId}" />
+                                                <Run Text=")" />
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <!-- Live Elapsed Ticker & Status -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0">
+                                            <TextBlock Text="{Binding ElapsedFormatted}" Foreground="{StaticResource BrushAccentCyan}" FontSize="22" FontWeight="Black" FontFamily="Consolas" />
+                                            <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource BrushAccent}" FontSize="12" FontWeight="SemiBold" Margin="0,2,0,0" />
+                                        </StackPanel>
+
+                                        <!-- Quick Actions -->
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="+15m Bonus" 
+                                                    Command="{Binding DataContext.QuickBonus15mCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                    CommandParameter="{Binding}" 
+                                                    Style="{StaticResource PrimaryButtonStyle}" Height="32" Margin="0,0,10,0" />
+                                            <Button Content="End Session" 
+                                                    Command="{Binding DataContext.EndSessionNowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                    CommandParameter="{Binding}" 
+                                                    Style="{StaticResource DangerButtonStyle}" Height="32" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
             <!-- Games & Limits Status List -->
             <Border Style="{StaticResource CardBorderStyle}">
                 <StackPanel>
-                    <TextBlock Text="Live Game Allowances" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,0,16" />
+                    <TextBlock Text="Monitored Game Allowances" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,0,16" />
 
                     <ItemsControl ItemsSource="{Binding GameStatuses}">
                         <ItemsControl.ItemTemplate>
@@ -78,14 +163,15 @@
                                 <Border Style="{StaticResource ElevatedCardBorderStyle}" Margin="0,0,0,12">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="200" />
+                                            <ColumnDefinition Width="180" />
                                             <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="130" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding GameName}" Foreground="{StaticResource BrushTextPrimary}" FontSize="15" FontWeight="Bold" />
-                                            <TextBlock Text="Status: Active Profile" Style="{StaticResource SubtextStyle}" Margin="0,2,0,0" />
+                                            <TextBlock Text="Active Profile" Style="{StaticResource SubtextStyle}" Margin="0,2,0,0" />
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0">
@@ -105,13 +191,18 @@
                                                          Background="{StaticResource BrushBorder}" BorderThickness="0" />
                                         </StackPanel>
 
-                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,16,0">
                                             <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource BrushAccent}" FontWeight="Bold" FontSize="14">
                                                 <Run Text="{Binding MinutesRemaining, TargetNullValue='∞', Mode=OneWay}" />
                                                 <Run Text=" min left" />
                                             </TextBlock>
                                             <TextBlock Text="Allowance Available" Style="{StaticResource SubtextStyle}" HorizontalAlignment="Right" Margin="0,2,0,0" />
                                         </StackPanel>
+
+                                        <Button Grid.Column="3" Content="Emergency Lock" 
+                                                Command="{Binding DataContext.EmergencyLockCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                CommandParameter="{Binding}" 
+                                                Style="{StaticResource DangerButtonStyle}" Height="30" FontSize="11" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>

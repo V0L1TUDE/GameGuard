@@ -3,6 +3,7 @@ using System.Windows;
 using GameGuard.Core.Interfaces;
 using GameGuard.Infrastructure.DependencyInjection;
 using GameGuard.UI.Mvvm;
+using GameGuard.UI.Services;
 using GameGuard.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -59,6 +60,7 @@ public partial class App : Application
         services.AddGameGuardRelaunchSuppression();
 
         // MVVM & UI Services
+        services.AddSingleton<IDialogService, WpfDialogService>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<MainViewModel>();
         services.AddTransient<DashboardViewModel>();

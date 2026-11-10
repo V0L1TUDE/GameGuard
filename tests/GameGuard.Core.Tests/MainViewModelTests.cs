@@ -6,6 +6,7 @@ using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Persistence;
 using GameGuard.Infrastructure.Tracking;
 using GameGuard.UI.Mvvm;
+using GameGuard.UI.Services;
 using GameGuard.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -71,23 +72,56 @@ public sealed class MainViewModelTests : IDisposable
         }
     }
 
+    private IServiceProvider CreateTestServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<INavigationService, NavigationService>();
+        services.AddSingleton<IDialogService, MockDialogService>();
+        services.AddSingleton<IAdminAuthService, MockAdminAuthService>();
+        services.AddSingleton<IAdminOverrideRepository, MockAdminOverrideRepository>();
+        services.AddSingleton<IEnforcementService, MockEnforcementService>();
+        services.AddSingleton<ILimitManagerService, MockLimitManagerService>();
+        services.AddSingleton<IRelaunchBlockRepository, MockRelaunchBlockRepository>();
+
+        services.AddTransient<DashboardViewModel>(sp => new DashboardViewModel(
+            sp.GetRequiredService<ILimitManagerService>(),
+            _timeTracker,
+            _gameRepo,
+            sp.GetRequiredService<IAdminOverrideRepository>(),
+            sp.GetRequiredService<IEnforcementService>(),
+            sp.GetRequiredService<IAdminAuthService>(),
+            sp.GetRequiredService<IDialogService>()));
+
+        services.AddTransient<GamesViewModel>(sp => new GamesViewModel(
+            _gameRepo,
+            sp.GetRequiredService<IDialogService>(),
+            sp.GetRequiredService<IAdminAuthService>()));
+
+        services.AddTransient<LimitsViewModel>(sp => new LimitsViewModel(
+            _limitRepo,
+            _gameRepo,
+            sp.GetRequiredService<IDialogService>(),
+            sp.GetRequiredService<IAdminAuthService>()));
+
+        services.AddTransient<HistoryViewModel>(sp => new HistoryViewModel(
+            _sessionRepo,
+            sp.GetRequiredService<IRelaunchBlockRepository>()));
+
+        services.AddTransient<SettingsViewModel>(sp => new SettingsViewModel(
+            sp.GetRequiredService<IAdminAuthService>(),
+            sp.GetRequiredService<IAdminOverrideRepository>(),
+            _gameRepo,
+            sp.GetRequiredService<IDialogService>()));
+
+        return services.BuildServiceProvider();
+    }
+
     [Fact]
     public async Task MainViewModel_InitializesAndNavigatesToDashboard()
     {
         await _initializer.InitializeAsync();
 
-        var services = new ServiceCollection();
-        services.AddSingleton<INavigationService, NavigationService>();
-        services.AddTransient<DashboardViewModel>(sp => new DashboardViewModel(
-            new MockLimitManagerService(),
-            _timeTracker,
-            _gameRepo));
-        services.AddTransient<GamesViewModel>(sp => new GamesViewModel(_gameRepo));
-        services.AddTransient<LimitsViewModel>(sp => new LimitsViewModel(_limitRepo, _gameRepo));
-        services.AddTransient<HistoryViewModel>(sp => new HistoryViewModel(_sessionRepo, new MockRelaunchBlockRepository()));
-        services.AddTransient<SettingsViewModel>(sp => new SettingsViewModel(new MockAdminAuthService(), new MockAdminOverrideRepository()));
-
-        var provider = services.BuildServiceProvider();
+        var provider = CreateTestServiceProvider();
         var nav = provider.GetRequiredService<INavigationService>();
 
         var mainVm = new MainViewModel(nav, _processMonitor, _timeTracker);
@@ -104,18 +138,7 @@ public sealed class MainViewModelTests : IDisposable
     {
         await _initializer.InitializeAsync();
 
-        var services = new ServiceCollection();
-        services.AddSingleton<INavigationService, NavigationService>();
-        services.AddTransient<DashboardViewModel>(sp => new DashboardViewModel(
-            new MockLimitManagerService(),
-            _timeTracker,
-            _gameRepo));
-        services.AddTransient<GamesViewModel>(sp => new GamesViewModel(_gameRepo));
-        services.AddTransient<LimitsViewModel>(sp => new LimitsViewModel(_limitRepo, _gameRepo));
-        services.AddTransient<HistoryViewModel>(sp => new HistoryViewModel(_sessionRepo, new MockRelaunchBlockRepository()));
-        services.AddTransient<SettingsViewModel>(sp => new SettingsViewModel(new MockAdminAuthService(), new MockAdminOverrideRepository()));
-
-        var provider = services.BuildServiceProvider();
+        var provider = CreateTestServiceProvider();
         var nav = provider.GetRequiredService<INavigationService>();
 
         var mainVm = new MainViewModel(nav, _processMonitor, _timeTracker);
@@ -153,38 +176,6 @@ public sealed class MainViewModelTests : IDisposable
         Assert.Equal(0, mainVm.ActiveGamesCount);
     }
 
-    private sealed class MockLimitManagerService : ILimitManagerService
-    {
-        public event EventHandler<LimitWarningEventArgs>? LimitWarningIssued { add { } remove { } }
-        public event EventHandler<GracePeriodEventArgs>? GracePeriodStarted { add { } remove { } }
-        public event EventHandler<GracePeriodEventArgs>? GracePeriodUpdated { add { } remove { } }
-        public event EventHandler<QuotaExhaustedEventArgs>? QuotaExhausted { add { } remove { } }
-        public event EventHandler<DayRolloverEventArgs>? DayRolloverOccurred { add { } remove { } }
-
-        public bool IsRunning => false;
-
-        public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task CheckLimitsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<LimitCalculationResult> GetCurrentStatusAsync(Guid gameProfileId, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new LimitCalculationResult
-            {
-                GameProfileId = gameProfileId,
-                GameName = "MockGame",
-                MinutesUsedToday = 15,
-                EffectiveLimitMinutes = 60,
-                SecondsRemaining = 2700
-            });
-        }
-        public Task<IReadOnlyList<LimitCalculationResult>> GetAllCurrentStatusesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<LimitCalculationResult>>(Array.Empty<LimitCalculationResult>());
-        }
-        public void Dispose() { }
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    }
-
     private sealed class MockRelaunchBlockRepository : IRelaunchBlockRepository
     {
         public Task RecordBlockAsync(RelaunchBlockRecord record, CancellationToken cancellationToken = default) => Task.CompletedTask;
@@ -192,19 +183,6 @@ public sealed class MainViewModelTests : IDisposable
             => Task.FromResult<IReadOnlyList<RelaunchBlockRecord>>(Array.Empty<RelaunchBlockRecord>());
         public Task<int> GetBlockCountForGameTodayAsync(Guid gameProfileId, DateTime dayStartUtc, DateTime dayEndUtc, CancellationToken cancellationToken = default)
             => Task.FromResult(0);
-    }
-
-    private sealed class MockAdminAuthService : IAdminAuthService
-    {
-        public Task<bool> IsPasswordConfiguredAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
-        public Task SetPasswordAsync(string password, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<bool> ValidatePasswordAsync(string password, CancellationToken cancellationToken = default) => Task.FromResult(true);
-        public Task<bool> ChangePasswordAsync(string currentPassword, string newPassword, CancellationToken cancellationToken = default) => Task.FromResult(true);
-        public bool IsLockedOut(out TimeSpan remainingLockout)
-        {
-            remainingLockout = TimeSpan.Zero;
-            return false;
-        }
     }
 
     private sealed class MockAdminOverrideRepository : IAdminOverrideRepository

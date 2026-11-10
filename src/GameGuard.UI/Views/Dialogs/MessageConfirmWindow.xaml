@@ -1,0 +1,29 @@
+<Window x:Class="GameGuard.UI.Views.Dialogs.MessageConfirmWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GameGuard Alert"
+        Height="220" Width="440"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource BrushBackground}">
+
+    <Border Padding="24" Background="{StaticResource BrushSurface}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock x:Name="TitleText" Grid.Row="0" Text="Title" Style="{StaticResource SectionHeaderStyle}" Margin="0,0,0,12" />
+
+            <TextBlock x:Name="MessageText" Grid.Row="1" Text="Message" Style="{StaticResource SubtextStyle}" TextWrapping="Wrap" />
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                <Button x:Name="CancelBtn" Content="Cancel" Click="OnCancelClick" Style="{StaticResource OutlineButtonStyle}" Width="90" Margin="0,0,12,0" />
+                <Button x:Name="OkBtn" Content="Confirm" Click="OnOkClick" Style="{StaticResource PrimaryButtonStyle}" Width="90" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
