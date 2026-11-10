@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\GameGuard.Core\GameGuard.Core.csproj" />
     <ProjectReference Include="..\..\src\GameGuard.Infrastructure\GameGuard.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\GameGuard.Service\GameGuard.Service.csproj" />
     <ProjectReference Include="..\..\src\GameGuard.UI\GameGuard.UI.csproj" />
   </ItemGroup>
 

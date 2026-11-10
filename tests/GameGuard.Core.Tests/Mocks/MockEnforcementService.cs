@@ -9,12 +9,25 @@ public sealed class MockEnforcementService : IEnforcementService
 
     public void RaiseGameEnforced(GameEnforcedEventArgs e) => GameEnforced?.Invoke(this, e);
 
-    public bool IsRunning => true;
+    public bool IsRunning { get; private set; } = true;
+    public bool StartCalled { get; private set; }
+    public bool StopCalled { get; private set; }
 
     public List<(GameProfile Game, int ProcessId, string ProcessName)> EnforcedCalls { get; } = new();
 
-    public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-    public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        IsRunning = true;
+        StartCalled = true;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        IsRunning = false;
+        StopCalled = true;
+        return Task.CompletedTask;
+    }
 
     public Task<EnforcementResult> EnforceGameAsync(
         GameProfile game,

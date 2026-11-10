@@ -17,10 +17,23 @@ public sealed class MockLimitManagerService : ILimitManagerService
     public void RaiseQuotaExhausted(QuotaExhaustedEventArgs e) => QuotaExhausted?.Invoke(this, e);
     public void RaiseDayRollover(DayRolloverEventArgs e) => DayRolloverOccurred?.Invoke(this, e);
 
-    public bool IsRunning => false;
+    public bool IsRunning { get; private set; }
+    public bool StartCalled { get; private set; }
+    public bool StopCalled { get; private set; }
 
-    public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-    public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        IsRunning = true;
+        StartCalled = true;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        IsRunning = false;
+        StopCalled = true;
+        return Task.CompletedTask;
+    }
     public Task CheckLimitsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task<LimitCalculationResult> GetCurrentStatusAsync(Guid gameProfileId, CancellationToken cancellationToken = default)

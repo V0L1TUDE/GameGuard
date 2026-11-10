@@ -9,10 +9,23 @@ public sealed class MockRelaunchSuppressionService : IRelaunchSuppressionService
 
     public void RaiseRelaunchBlocked(RelaunchBlockedEventArgs e) => RelaunchBlocked?.Invoke(this, e);
 
-    public bool IsRunning => true;
+    public bool IsRunning { get; private set; } = true;
+    public bool StartCalled { get; private set; }
+    public bool StopCalled { get; private set; }
 
-    public Task StartAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-    public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        IsRunning = true;
+        StartCalled = true;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        IsRunning = false;
+        StopCalled = true;
+        return Task.CompletedTask;
+    }
 
     public bool IsInCooldown(Guid gameProfileId, out TimeSpan remainingCooldown)
     {

@@ -3,6 +3,8 @@ using System.Windows;
 using GameGuard.Core.Interfaces;
 using GameGuard.Infrastructure.DependencyInjection;
 using GameGuard.Infrastructure.Notifications;
+using GameGuard.Infrastructure.Persistence;
+using GameGuard.Infrastructure.Services;
 using GameGuard.UI.Mvvm;
 using GameGuard.UI.Services;
 using GameGuard.UI.Services.Tray;
@@ -15,6 +17,7 @@ namespace GameGuard.UI;
 public partial class App : Application
 {
     private ServiceProvider? _serviceProvider;
+    private bool _isServiceActive;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -29,12 +32,20 @@ public partial class App : Application
         var dbInitializer = _serviceProvider.GetRequiredService<IDatabaseInitializer>();
         await dbInitializer.InitializeAsync();
 
-        // Start background monitoring & enforcement engines
+        // Check if Windows Background Service is already running
+        _isServiceActive = WindowsServiceDetector.IsServiceRunning();
+
+        // Initialize active tracking state
         await _serviceProvider.GetRequiredService<ITimeTrackerService>().InitializeAsync();
-        await _serviceProvider.GetRequiredService<IProcessMonitor>().StartAsync();
-        await _serviceProvider.GetRequiredService<ILimitManagerService>().StartAsync();
-        await _serviceProvider.GetRequiredService<IEnforcementService>().StartAsync();
-        await _serviceProvider.GetRequiredService<IRelaunchSuppressionService>().StartAsync();
+
+        // If background service is NOT running, run background monitoring engines in-process as fallback
+        if (!_isServiceActive)
+        {
+            await _serviceProvider.GetRequiredService<IProcessMonitor>().StartAsync();
+            await _serviceProvider.GetRequiredService<ILimitManagerService>().StartAsync();
+            await _serviceProvider.GetRequiredService<IEnforcementService>().StartAsync();
+            await _serviceProvider.GetRequiredService<IRelaunchSuppressionService>().StartAsync();
+        }
 
         // Start notification dispatcher service
         _serviceProvider.GetRequiredService<NotificationDispatcherService>();
@@ -56,10 +67,7 @@ public partial class App : Application
             builder.SetMinimumLevel(LogLevel.Information);
         });
 
-        string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string dbDirectory = Path.Combine(appData, "GameGuard");
-        Directory.CreateDirectory(dbDirectory);
-        string dbPath = Path.Combine(dbDirectory, "gameguard.db");
+        string dbPath = GameGuardPaths.GetDatabasePath(preferSharedProgramData: true);
 
         // Infrastructure Services
         services.AddGameGuardSqlite(dbPath);
@@ -93,10 +101,13 @@ public partial class App : Application
                 _serviceProvider.GetService<ISystemTrayManager>()?.Dispose();
                 _serviceProvider.GetService<NotificationDispatcherService>()?.Dispose();
 
-                await _serviceProvider.GetRequiredService<IRelaunchSuppressionService>().StopAsync();
-                await _serviceProvider.GetRequiredService<IEnforcementService>().StopAsync();
-                await _serviceProvider.GetRequiredService<ILimitManagerService>().StopAsync();
-                await _serviceProvider.GetRequiredService<IProcessMonitor>().StopAsync();
+                if (!_isServiceActive)
+                {
+                    await _serviceProvider.GetRequiredService<IRelaunchSuppressionService>().StopAsync();
+                    await _serviceProvider.GetRequiredService<IEnforcementService>().StopAsync();
+                    await _serviceProvider.GetRequiredService<ILimitManagerService>().StopAsync();
+                    await _serviceProvider.GetRequiredService<IProcessMonitor>().StopAsync();
+                }
             }
             catch
             {

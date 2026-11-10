@@ -17,10 +17,10 @@
 ### Phase 4: Desktop Application
 - [x] **Stage 7: WPF Application Foundation & MVVM Architecture**
 - [x] **Stage 8: Dashboard, Game Configuration & Limit Management UI**
-- [ ] **Stage 9: Session History, Analytics, System Tray & Notifications**
+- [x] **Stage 9: Session History, Analytics, System Tray & Notifications**
 
 ### Phase 5: Background Architecture
-- [ ] **Stage 10: Windows Background Service & Monitoring Extraction**
+- [x] **Stage 10: Windows Background Service & Monitoring Extraction**
 - [ ] **Stage 11: Named Pipes IPC, Service Recovery & Security**
 
 ### Phase 6: Production Readiness
@@ -517,5 +517,76 @@ dotnet run --project src/GameGuard.UI/GameGuard.UI.csproj
 
 ### Known Limitations
 - Stage 9 completes Phase 4 (Desktop Application). All UI views (Dashboard, Games, Limits, History/Analytics, Settings), dialogs, tray minimization, and desktop alerts are operational.
-- Stage 10 introduces the dedicated Windows Background Service daemon and OS autostart tamper resistance.
+- Stage 10 implements the dedicated Windows Background Service daemon and OS autostart tamper resistance.
+
+
+---
+
+## Stage 10: Windows Background Service & Monitoring Extraction
+
+### Status: COMPLETED
+
+### Objectives
+Extract background gaming process monitoring, time tracking, limit management, enforcement, relaunch suppression, and system clock tamper detection into a dedicated headless Windows Background Service (`GameGuard.Service`). Ensure zero-tamper persistence so that closing or terminating the desktop GUI process never interrupts enforcement, support automatic Windows startup with recovery watchdog policies, and provide dual-mode execution (installed Windows service vs. standalone portable desktop fallback).
+
+### Components Implemented
+1. **Windows Service Host (`src/GameGuard.Service`)**:
+   - Built on .NET 10 LTS (`net10.0-windows`) using `Microsoft.Extensions.Hosting.WindowsServices`.
+   - References `GameGuard.Core` and `GameGuard.Infrastructure`.
+   - Added to solution hierarchy in `GameGuard.slnx`.
+
+2. **Daemon Background Worker (`GameGuardWorker.cs`)**:
+   - Implements `BackgroundService` lifecycle.
+   - **Startup Orchestration**:
+     - Automatically verifies and migrates SQLite database schema in shared `%ProgramData%\GameGuard\gameguard.db`.
+     - Initializes `ITimeTrackerService` and reconciles any orphaned sessions from unexpected shutdowns or power loss.
+     - Spawns and manages `IProcessMonitor`, `ILimitManagerService`, `IEnforcementService`, and `IRelaunchSuppressionService`.
+   - **Anti-Tamper & Heartbeat Watchdog**:
+     - Periodically checks system time against `IClockTamperDetector` to intercept clock rollbacks.
+     - Performs non-blocking health checks and logs active session metrics.
+   - **Graceful Shutdown**: Stops all background engines cleanly on Windows Service stop / shutdown events.
+
+3. **Service Management CLI (`ServiceManager.cs` & `Program.cs`)**:
+   - `GameGuard.Service --install` / `-i`: Registers service via Windows Service Control Manager (`sc.exe create GameGuard binPath= "..." start= auto DisplayName= "..."`) with failure auto-recovery (`sc.exe failure ... actions= restart/60000`).
+   - `GameGuard.Service --uninstall` / `-u`: Safely stops and removes service from Windows SCM.
+   - `GameGuard.Service --start`: Starts service using `ServiceController`.
+   - `GameGuard.Service --stop`: Stops service using `ServiceController`.
+   - `GameGuard.Service --status` / `-s`: Queries live installation and execution state (`Installed (Running)`, `Installed (Stopped)`, or `Not installed`).
+   - `GameGuard.Service --help` / `-h`: Displays formatted CLI options.
+
+4. **Shared Storage & Dual-Mode Coordination (`GameGuardPaths` & `WindowsServiceDetector`)**:
+   - `GameGuardPaths`: Resolves `%ProgramData%\GameGuard\gameguard.db` for machine-wide daemon & UI access, with seamless fallback to `%LOCALAPPDATA%`.
+   - `WindowsServiceDetector`: Non-elevated query detecting whether `GameGuard` Windows Service is actively running.
+   - `App.xaml.cs`: Dual-mode orchestration:
+     - If Windows Service is running: UI launches as client viewer, preventing duplicate process monitoring or double-counting.
+     - If Windows Service is NOT running: UI seamlessly spins up internal monitoring engines (preserving single-executable portable mode).
+
+5. **Unit & Integration Testing (`tests/GameGuard.Core.Tests`)**:
+   - Added `GameGuardPathsTests`:
+     - `GetDatabasePath_ReturnsValidPathEndingInGameguardDb`
+     - `GetLogDirectory_ReturnsValidDirectoryAndEnsuresExists`
+     - `WindowsServiceDetector_IsServiceRunning_DoesNotThrow`
+   - Added `GameGuardWorkerTests`:
+     - `Worker_ExecutesStartup_InitializesDatabaseAndEngines` (verifies complete lifecycle startup, reconciliation, and cancellation shutdown).
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 4 new automated unit tests (120 total):
+- `GameGuardPathsTests`: 3 passed
+- `GameGuardWorkerTests`: 1 passed
+
+- **Total Test Suite**: **120 passed, 0 failed, 0 skipped (Duration: ~1.0 s)**.
+
+### Verification Commands
+```powershell
+$env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+dotnet build GameGuard.slnx
+dotnet test GameGuard.slnx
+dotnet run --project src/GameGuard.Service/GameGuard.Service.csproj -- --status
+dotnet run --project src/GameGuard.UI/GameGuard.UI.csproj
+```
+
+### Known Limitations
+- Stage 10 extracts and runs the headless background service daemon with Windows SCM integration.
+- Stage 11 establishes real-time Named Pipes Inter-Process Communication (IPC) between `GameGuard.Service` and `GameGuard.UI` for instantaneous push notifications, remote session termination, and live status streaming.
+
 
