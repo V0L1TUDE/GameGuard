@@ -2,6 +2,8 @@ using GameGuard.Core.Interfaces;
 using GameGuard.Core.Models;
 using GameGuard.Core.Services;
 using GameGuard.Core.Tests.Mocks;
+using GameGuard.Infrastructure.Analytics;
+using GameGuard.Infrastructure.Limits;
 using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Persistence;
 using GameGuard.Infrastructure.Tracking;
@@ -103,9 +105,23 @@ public sealed class MainViewModelTests : IDisposable
             sp.GetRequiredService<IDialogService>(),
             sp.GetRequiredService<IAdminAuthService>()));
 
-        services.AddTransient<HistoryViewModel>(sp => new HistoryViewModel(
+        var boundaryCalc = new DayBoundaryCalculator();
+        services.AddSingleton<IDayBoundaryCalculator>(boundaryCalc);
+        services.AddSingleton<ISessionAnalyticsService>(sp => new SessionAnalyticsService(
             _sessionRepo,
-            sp.GetRequiredService<IRelaunchBlockRepository>()));
+            sp.GetRequiredService<IRelaunchBlockRepository>(),
+            _gameRepo,
+            _limitRepo,
+            boundaryCalc,
+            _systemClock));
+
+        services.AddTransient<HistoryViewModel>(sp => new HistoryViewModel(
+            sp.GetRequiredService<ISessionAnalyticsService>(),
+            _gameRepo,
+            _sessionRepo,
+            sp.GetRequiredService<IRelaunchBlockRepository>(),
+            boundaryCalc,
+            _systemClock));
 
         services.AddTransient<SettingsViewModel>(sp => new SettingsViewModel(
             sp.GetRequiredService<IAdminAuthService>(),

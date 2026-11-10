@@ -1,9 +1,11 @@
 using GameGuard.Core.Interfaces;
 using GameGuard.Core.Services;
+using GameGuard.Infrastructure.Analytics;
 using GameGuard.Infrastructure.Enforcement;
 using GameGuard.Infrastructure.Limits;
 using GameGuard.Infrastructure.Monitoring;
 using GameGuard.Infrastructure.Native;
+using GameGuard.Infrastructure.Notifications;
 using GameGuard.Infrastructure.Persistence;
 using GameGuard.Infrastructure.Security;
 using GameGuard.Infrastructure.Tracking;
@@ -124,6 +126,19 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ISystemClock>(),
             sp.GetRequiredService<ILogger<RelaunchSuppressionService>>()));
 
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardAnalytics(this IServiceCollection services)
+    {
+        services.AddSingleton<ISessionAnalyticsService, SessionAnalyticsService>();
+        return services;
+    }
+
+    public static IServiceCollection AddGameGuardNotifications(this IServiceCollection services)
+    {
+        services.AddSingleton<INotificationService, NotificationService>();
+        services.AddSingleton<NotificationDispatcherService>();
         return services;
     }
 }

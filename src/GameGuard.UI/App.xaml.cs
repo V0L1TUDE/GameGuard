@@ -2,8 +2,10 @@ using System.IO;
 using System.Windows;
 using GameGuard.Core.Interfaces;
 using GameGuard.Infrastructure.DependencyInjection;
+using GameGuard.Infrastructure.Notifications;
 using GameGuard.UI.Mvvm;
 using GameGuard.UI.Services;
+using GameGuard.UI.Services.Tray;
 using GameGuard.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,8 +36,16 @@ public partial class App : Application
         await _serviceProvider.GetRequiredService<IEnforcementService>().StartAsync();
         await _serviceProvider.GetRequiredService<IRelaunchSuppressionService>().StartAsync();
 
+        // Start notification dispatcher service
+        _serviceProvider.GetRequiredService<NotificationDispatcherService>();
+
         // Launch Shell Window
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+
+        // Initialize System Tray Manager
+        var trayManager = _serviceProvider.GetRequiredService<ISystemTrayManager>();
+        trayManager.Initialize(mainWindow);
+
         mainWindow.Show();
     }
 
@@ -58,10 +68,13 @@ public partial class App : Application
         services.AddGameGuardLimitManagement();
         services.AddGameGuardEnforcement();
         services.AddGameGuardRelaunchSuppression();
+        services.AddGameGuardAnalytics();
+        services.AddGameGuardNotifications();
 
         // MVVM & UI Services
         services.AddSingleton<IDialogService, WpfDialogService>();
         services.AddSingleton<INavigationService, NavigationService>();
+        services.AddSingleton<ISystemTrayManager, SystemTrayManager>();
         services.AddSingleton<MainViewModel>();
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<GamesViewModel>();
@@ -77,6 +90,9 @@ public partial class App : Application
         {
             try
             {
+                _serviceProvider.GetService<ISystemTrayManager>()?.Dispose();
+                _serviceProvider.GetService<NotificationDispatcherService>()?.Dispose();
+
                 await _serviceProvider.GetRequiredService<IRelaunchSuppressionService>().StopAsync();
                 await _serviceProvider.GetRequiredService<IEnforcementService>().StopAsync();
                 await _serviceProvider.GetRequiredService<ILimitManagerService>().StopAsync();

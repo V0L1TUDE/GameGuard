@@ -426,4 +426,96 @@ dotnet test GameGuard.slnx
 
 ### Known Limitations
 - Stage 8 completes all interactive dialogs, limits configuration, and profile management for the desktop client.
-- Historical session analytics graphs, system tray minimization, and Windows toast alerts are scheduled for Stage 9.
+- Historical session analytics graphs, system tray minimization, and Windows toast alerts are implemented in Stage 9.
+
+
+---
+
+## Stage 9: Session History, Analytics, System Tray & Notifications
+
+### Status: COMPLETED
+
+### Objectives
+Provide comprehensive historical gameplay analytics, daily and 30-day playtime distribution metrics, session log filtering by game and date range, native Windows system tray minimization with live status and dark-themed context menu, and automatic desktop toast notifications for approaching limit warnings, grace period countdowns, automatic enforcement events, and suppressed relaunch blocks.
+
+### Components Implemented
+1. **Analytics Domain & Models (`GameGuard.Core.Models` & `Interfaces`)**:
+   - `GamePlaytimeBreakdown`: Record detailing GameProfileId, GameName, TotalPlaytime (`TimeSpan`), SessionCount, and PercentageOfTotal.
+   - `SessionAnalyticsSummary`: Aggregate summary encompassing `TotalPlaytimeToday`, `TotalPlaytimePast7Days`, `TotalPlaytimePast30Days`, `TotalSessionsCount`, `TotalBlockedRelaunchesCount`, per-game breakdowns, and session termination reason distributions.
+   - `NotificationEventArgs` & `NotificationType`: Payload contracts for dispatching `Information`, `Warning`, `Danger`, and `Success` desktop toast alerts.
+   - `ISessionAnalyticsService`: Contract for querying rolling analytics summaries and filtered session ranges.
+   - `INotificationService`: Contract for event-driven desktop notification publishing.
+
+2. **Session Analytics & Notification Dispatcher (`GameGuard.Infrastructure`)**:
+   - `SessionAnalyticsService`:
+     - Queries SQLite session and relaunch block repositories across rolling 1-day, 7-day, and 30-day windows.
+     - Resolves game IDs against game profiles for clear naming.
+     - Calculates precise proportional playtime percentages and aggregates termination reason metrics.
+     - Handles date-range slicing (Today, Past 7 Days, Past 30 Days, All Time) and specific game filtering.
+   - `NotificationService`: Core pub/sub implementation of `INotificationService`.
+   - `NotificationDispatcherService`:
+     - Listens to `ILimitManagerService.LimitWarningIssued` $\to$ dispatches 15m/5m/1m warnings.
+     - Listens to `ILimitManagerService.GracePeriodStarted` $\to$ dispatches 60s grace countdown notice.
+     - Listens to `IEnforcementService.GameEnforced` $\to$ dispatches process termination alert.
+     - Listens to `IRelaunchSuppressionService.RelaunchBlocked` $\to$ dispatches relaunch intercept notice.
+     - Listens to `IClockTamperDetector.ClockRollbackDetected` $\to$ dispatches system clock tamper danger alert.
+
+3. **Native Win32 System Tray & Context Menu (`src/GameGuard.UI/Services/Tray`)**:
+   - `ISystemTrayManager` / `SystemTrayManager`:
+     - Anti-cheat safe native Win32 `Shell_NotifyIconW` integration with RAII handling and message-only window hook via `HwndSource`.
+     - Uses security shield icon (`IDI_SHIELD`).
+     - **Dynamic Status & Tooltip**: Displays current protection state (e.g. `GameGuard: Protected - Gaming Idle` or active game allowance remaining).
+     - **Native Windows Toast Balloons**: Directly triggers Windows 10/11 Action Center toast flyouts with standard notification sounds.
+     - **Window Minimization**: Minimizing or closing `MainWindow` gracefully docks the app into the Windows notification tray area rather than terminating.
+     - **Dark-Themed Tray Context Menu**:
+       - Live game status indicator.
+       - "Open GameGuard" (restores and focuses window).
+       - "Grant +15m Bonus" (admin-authenticated quick extension).
+       - "Emergency Lock All" (admin-authenticated instant lockdown).
+       - "Exit GameGuard" (guarded by admin password authentication to prevent unprivileged termination).
+
+4. **Enhanced Analytics & History UI (`src/GameGuard.UI/ViewModels` & `Views`)**:
+   - `GamingSessionDisplayModel`: Maps database sessions to local timestamps, human-friendly duration strings (`1h 24m 10s`), and color-coded termination badges (`Normal Exit`, `Limit Enforced`, `Admin Closed`, `Crash / External`).
+   - `GameBreakdownDisplayModel`: Represents proportional playtime progress bars and percentages.
+   - `HistoryViewModel` & `HistoryView`:
+     - 4 top KPI summary cards: `PLAYTIME TODAY`, `PAST 7 DAYS`, `TOTAL SESSIONS`, `BLOCKED RELAUNCHES`.
+     - 30-day playtime distribution cards with visual progress bars.
+     - Dynamic filter dropdown bar for Games (`All Games` or specific title) and Date Ranges (`All Time`, `Today`, `Past 7 Days`, `Past 30 Days`).
+     - Filtered session log table with full audit details and notes.
+     - Blocked relaunch audit trail list.
+
+5. **Test Doubles & Unit Testing (`tests/GameGuard.Core.Tests`)**:
+   - Added `SessionAnalyticsServiceTests`:
+     - `GetAnalyticsSummaryAsync_CalculatesDailyWeeklyAndMonthlyTotalsCorrectly`
+     - `GetFilteredSessionsAsync_WithDateRangeAndGameFilter_ReturnsMatchingSessions`
+   - Added `NotificationDispatcherTests`:
+     - `LimitWarningIssued_DispatchesWarningNotification`
+     - `GracePeriodStarted_DispatchesWarningNotification`
+     - `GameEnforced_DispatchesDangerNotification`
+     - `RelaunchBlocked_DispatchesDangerNotification`
+     - `ClockRollbackDetected_DispatchesSecurityNotification`
+   - Added `HistoryViewModelTests`:
+     - `InitializeAsync_LoadsAnalyticsAndBreakdowns`
+     - `ApplyFiltersAsync_FiltersByGameName`
+     - `ApplyFiltersAsync_FiltersByDateRange`
+
+### Test Suite Results (`GameGuard.Core.Tests`)
+Added 10 new automated unit tests (116 total):
+- `SessionAnalyticsServiceTests`: 2 passed
+- `NotificationDispatcherTests`: 5 passed
+- `HistoryViewModelTests`: 3 passed
+
+- **Total Test Suite**: **116 passed, 0 failed, 0 skipped (Duration: ~860 ms)**.
+
+### Verification Commands
+```powershell
+$env:PATH = "$env:USERPROFILE\.dotnet;$env:PATH"
+dotnet build GameGuard.slnx
+dotnet test GameGuard.slnx
+dotnet run --project src/GameGuard.UI/GameGuard.UI.csproj
+```
+
+### Known Limitations
+- Stage 9 completes Phase 4 (Desktop Application). All UI views (Dashboard, Games, Limits, History/Analytics, Settings), dialogs, tray minimization, and desktop alerts are operational.
+- Stage 10 introduces the dedicated Windows Background Service daemon and OS autostart tamper resistance.
+

@@ -5,11 +5,17 @@ namespace GameGuard.Core.Tests.Mocks;
 
 public sealed class MockLimitManagerService : ILimitManagerService
 {
-    public event EventHandler<LimitWarningEventArgs>? LimitWarningIssued { add { } remove { } }
-    public event EventHandler<GracePeriodEventArgs>? GracePeriodStarted { add { } remove { } }
-    public event EventHandler<GracePeriodEventArgs>? GracePeriodUpdated { add { } remove { } }
-    public event EventHandler<QuotaExhaustedEventArgs>? QuotaExhausted { add { } remove { } }
-    public event EventHandler<DayRolloverEventArgs>? DayRolloverOccurred { add { } remove { } }
+    public event EventHandler<LimitWarningEventArgs>? LimitWarningIssued;
+    public event EventHandler<GracePeriodEventArgs>? GracePeriodStarted;
+    public event EventHandler<GracePeriodEventArgs>? GracePeriodUpdated;
+    public event EventHandler<QuotaExhaustedEventArgs>? QuotaExhausted;
+    public event EventHandler<DayRolloverEventArgs>? DayRolloverOccurred;
+
+    public void RaiseLimitWarning(LimitWarningEventArgs e) => LimitWarningIssued?.Invoke(this, e);
+    public void RaiseGracePeriodStarted(GracePeriodEventArgs e) => GracePeriodStarted?.Invoke(this, e);
+    public void RaiseGracePeriodUpdated(GracePeriodEventArgs e) => GracePeriodUpdated?.Invoke(this, e);
+    public void RaiseQuotaExhausted(QuotaExhaustedEventArgs e) => QuotaExhausted?.Invoke(this, e);
+    public void RaiseDayRollover(DayRolloverEventArgs e) => DayRolloverOccurred?.Invoke(this, e);
 
     public bool IsRunning => false;
 

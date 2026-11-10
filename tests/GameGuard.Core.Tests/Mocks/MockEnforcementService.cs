@@ -5,7 +5,9 @@ namespace GameGuard.Core.Tests.Mocks;
 
 public sealed class MockEnforcementService : IEnforcementService
 {
-    public event EventHandler<GameEnforcedEventArgs>? GameEnforced { add { } remove { } }
+    public event EventHandler<GameEnforcedEventArgs>? GameEnforced;
+
+    public void RaiseGameEnforced(GameEnforcedEventArgs e) => GameEnforced?.Invoke(this, e);
 
     public bool IsRunning => true;
 
