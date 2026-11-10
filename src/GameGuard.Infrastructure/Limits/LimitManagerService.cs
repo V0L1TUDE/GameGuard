@@ -104,11 +104,13 @@ public sealed class LimitManagerService : ILimitManagerService
 
         var activeSessions = _timeTracker.GetActiveSessions();
         var currentActiveSession = activeSessions.FirstOrDefault(s => s.GameProfileId == gameProfileId);
-        int currentActiveSeconds = currentActiveSession?.DurationSeconds ?? 0;
+        int currentActiveSeconds = currentActiveSession != null
+            ? CalculateSessionSecondsInBoundary(currentActiveSession, boundary.StartUtc, boundary.EndUtc)
+            : 0;
 
         int otherActiveSeconds = activeSessions
             .Where(s => s.GameProfileId != gameProfileId)
-            .Sum(s => s.DurationSeconds);
+            .Sum(s => CalculateSessionSecondsInBoundary(s, boundary.StartUtc, boundary.EndUtc));
 
         int totalSharedSeconds = dbSharedSeconds + otherActiveSeconds;
 
@@ -419,6 +421,23 @@ public sealed class LimitManagerService : ILimitManagerService
                 _logger.LogError(ex, "Error occurred in LimitManagerService event handler for {EventType}.", typeof(T).Name);
             }
         }
+    }
+
+    private static int CalculateSessionSecondsInBoundary(GamingSession session, DateTime boundaryStartUtc, DateTime boundaryEndUtc)
+    {
+        if (session.StartTimeUtc >= boundaryEndUtc)
+        {
+            return 0;
+        }
+
+        int totalSeconds = session.DurationSeconds;
+        if (session.StartTimeUtc < boundaryStartUtc)
+        {
+            int secondsBeforeBoundary = (int)(boundaryStartUtc - session.StartTimeUtc).TotalSeconds;
+            return Math.Max(0, totalSeconds - secondsBeforeBoundary);
+        }
+
+        return totalSeconds;
     }
 
     public void Dispose()

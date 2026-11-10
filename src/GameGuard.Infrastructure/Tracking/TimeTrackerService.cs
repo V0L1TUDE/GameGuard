@@ -340,9 +340,13 @@ public sealed class TimeTrackerService : ITimeTrackerService
             tracker.AccumulatedSeconds += delta.TotalSeconds;
             finalDurationSeconds = Math.Max(tracker.PersistedDurationSeconds, (int)Math.Round(tracker.AccumulatedSeconds));
 
+            var terminationReason = tracker.Session.TerminationReason != SessionTerminationReason.Active
+                ? tracker.Session.TerminationReason
+                : SessionTerminationReason.UserClosed;
+
             tracker.Session.DurationSeconds = finalDurationSeconds;
             tracker.Session.EndTimeUtc = args.TimestampUtc;
-            tracker.Session.TerminationReason = SessionTerminationReason.UserClosed;
+            tracker.Session.TerminationReason = terminationReason;
 
             session = tracker.Session;
             gameProfile = tracker.GameProfile;
@@ -354,7 +358,7 @@ public sealed class TimeTrackerService : ITimeTrackerService
             await _sessionRepository.EndSessionAsync(
                 session.Id,
                 session.EndTimeUtc!.Value,
-                SessionTerminationReason.UserClosed,
+                session.TerminationReason,
                 durationSeconds: finalDurationSeconds).ConfigureAwait(false);
         }
         catch (Exception ex)

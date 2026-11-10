@@ -159,6 +159,7 @@ public sealed class EnforcementService : IEnforcementService
                 var activeSession = _timeTracker.GetActiveSession(processId);
                 if (activeSession != null)
                 {
+                    activeSession.TerminationReason = SessionTerminationReason.LimitEnforced;
                     try
                     {
                         await _sessionRepository.EndSessionAsync(

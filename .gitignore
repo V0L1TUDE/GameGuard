@@ -18,3 +18,6 @@ gameguard_test*.db
 *.log
 logs/
 .system_generated/
+
+## Publish Output
+dist/
